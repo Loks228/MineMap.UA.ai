@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Адмін-панель | MineMap.UA</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+        }
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            width: 250px;
+            background-color: #343a40;
+            padding-top: 20px;
+            color: white;
+        }
+        .sidebar-header {
+            padding: 10px 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 15px;
+        }
+        .sidebar-menu {
+            list-style: none;
+            padding: 0;
+        }
+        .sidebar-menu li {
+            margin-bottom: 5px;
+        }
+        .sidebar-menu a {
+            display: block;
+            padding: 10px 15px;
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: all 0.3s;
+            border-left: 3px solid transparent;
+        }
+        .sidebar-menu a:hover, .sidebar-menu a.active {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-left-color: #0d6efd;
+        }
+        .sidebar-menu i {
+            margin-right: 10px;
+        }
+        .main-content {
+            margin-left: 250px;
+            padding: 20px;
+        }
+        .card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+        }
+        .card-header {
+            background-color: white;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+            font-weight: 600;
+        }
+        .status-badge {
+            padding: 0.4em 0.6em;
+            border-radius: 0.25rem;
+            font-size: 0.75em;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .badge-red { background-color: #ef4444; color: white; }
+        .badge-green { background-color: #10b981; color: white; }
+        .badge-yellow { background-color: #f59e0b; color: white; }
+        .badge-gray { background-color: #6b7280; color: white; }
+        .badge-purple { background-color: #8b5cf6; color: white; }
+        .priority-badge {
+            padding: 0.25em 0.6em;
+            border-radius: 0.25rem;
+            font-size: 0.75em;
+            font-weight: 600;
+        }
+        .stats-card {
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            color: white;
+        }
+        .stats-card.primary { background-color: #0d6efd; }
+        .stats-card.danger { background-color: #dc3545; }
+        .stats-card.warning { background-color: #ffc107; color: #343a40; }
+        .stats-card.success { background-color: #198754; }
+        .stats-value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        .user-role-badge {
+            background-color: #6f42c1;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            margin-left: 10px;
+        }
+        #map {
+            height: 400px;
+            width: 100%;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h4 class="mb-0">MineMap.UA</h4>
+            <p class="text-muted mb-0">Адмін-панель</p>
+        </div>
+        <ul class="sidebar-menu">
+            <li>
+                <a href="#dashboard" class="active" data-bs-toggle="tab">
+                    <i class="bi bi-speedometer2"></i> Огляд
+                </a>
+            </li>
+            <li>
+                <a href="#explosive-objects" data-bs-toggle="tab">
+                    <i class="bi bi-exclamation-triangle-fill"></i> Вибухонебезпечні об'єкти
+                </a>
+            </li>
+            <li>
+                <a href="#users" data-bs-toggle="tab">
+                    <i class="bi bi-people-fill"></i> Користувачі
+                </a>
+            </li>
+            <li>
+                <a href="#regions" data-bs-toggle="tab">
+                    <i class="bi bi-geo-alt-fill"></i> Регіони
+                </a>
+            </li>
+            <li>
+                <a href="#settings" data-bs-toggle="tab">
+                    <i class="bi bi-gear-fill"></i> Налаштування
+                </a>
+            </li>
+            <li>
+                <a href="/map/admin">
+                    <i class="bi bi-map-fill"></i> Повна карта
+                </a>
+            </li>
+            <li>
+                <a href="/logout">
+                    <i class="bi bi-box-arrow-right"></i> Вихід
+                </a>
+            </li>
+        </ul>
+    </div>
+
+    <div class="main-content">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="mb-0">Адмін-панель <span class="user-role-badge">{{ 'Адміністратор' if user.role == 'admin' else 'Модератор' }}</span></h2>
+            <div class="user-info">
+                <span>{{ user.full_name }}</span>
+                <span class="text-muted ms-2">{{ user.email }}</span>
+            </div>
+        </div>
+
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="dashboard">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="stats-card primary">
+                            <div class="stats-value" id="totalObjects">--</div>
+                            <div>Всього об'єктів</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stats-card danger">
+                            <div class="stats-value" id="minedObjects">--</div>
+                            <div>Заміновані ділянки</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stats-card warning">
+                            <div class="stats-value" id="unconfirmedObjects">--</div>
+                            <div>Непідтверджені</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stats-card success">
+                            <div class="stats-value" id="deminedObjects">--</div>
+                            <div>Розміновані ділянки</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-4">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <div>Карта об'єктів</div>
+                                <a href="/map/admin" class="btn btn-sm btn-primary">
+                                    Відкрити повну карту
+                                </a>
+                            </div>
+                            <div class="card-body">
+                                <div id="map"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">
+                                Останні повідомлення
+                            </div>
+                            <div class="card-body">
+                                <ul class="list-group list-group-flush" id="recentReports">
+                                    <!-- Will be populated dynamically -->
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="explosive-objects">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>Список вибухонебезпечних об'єктів</div>
+                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addObjectModal">
+                            Додати новий об'єкт
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Назва</th>
+                                        <th>Регіон</th>
+                                        <th>Статус</th>
+                                        <th>Пріоритет</th>
+                                        <th>Створено</th>
+                                        <th>Дії</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="objectsTable">
+                                    <!-- Will be populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="users">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>Користувачі системи</div>
+                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal">
+                            Додати користувача
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Ім'я користувача</th>
+                                        <th>Email</th>
+                                        <th>Повне ім'я</th>
+                                        <th>Роль</th>
+                                        <th>Дії</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="usersTable">
+                                    <!-- Will be populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="regions">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>Регіони</div>
+                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addRegionModal">
+                            Додати регіон
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Назва</th>
+                                        <th>Код</th>
+                                        <th>Координати центру</th>
+                                        <th>Дії</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="regionsTable">
+                                    <!-- Will be populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="settings">
+                <div class="card">
+                    <div class="card-header">Налаштування системи</div>
+                    <div class="card-body">
+                        <form id="settingsForm">
+                            <div class="mb-3">
+                                <label for="siteName" class="form-label">Назва сайту</label>
+                                <input type="text" class="form-control" id="siteName" value="Система інформування про вибухонебезпечні предмети">
+                            </div>
+                            <div class="mb-3">
+                                <label for="mapApiKey" class="form-label">Google Maps API Key</label>
+                                <input type="text" class="form-control" id="mapApiKey" value="{{ google_maps_api_key }}">
+                            </div>
+                            <div class="mb-3">
+                                <label for="defaultZoom" class="form-label">Початковий масштаб карти</label>
+                                <input type="number" class="form-control" id="defaultZoom" value="6" min="1" max="20">
+                            </div>
+                            <div class="mb-3">
+                                <label for="defaultCenter" class="form-label">Центр карти за замовчуванням</label>
+                                <div class="row">
+                                    <div class="col">
+                                        <input type="number" step="any" class="form-control" id="defaultLat" placeholder="Широта">
+                                    </div>
+                                    <div class="col">
+                                        <input type="number" step="any" class="form-control" id="defaultLng" placeholder="Довгота">
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Зберегти налаштування</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- Add Object Modal -->
+    <div class="modal fade" id="addObjectModal" tabindex="-1" aria-labelledby="addObjectModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addObjectModalLabel">Додати новий об'єкт</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addObjectForm">
+                        <div class="mb-3">
+                            <label for="title" class="form-label">Назва</label>
+                            <input type="text" class="form-control" id="title" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Опис</label>
+                            <textarea class="form-control" id="description" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="latitude" class="form-label">Широта</label>
+                            <input type="number" step="any" class="form-control" id="latitude" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="longitude" class="form-label">Довгота</label>
+                            <input type="number" step="any" class="form-control" id="longitude" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="status" class="form-label">Статус</label>
+                            <select class="form-select" id="status" required>
+                                <option value="secret">Секретна</option>
+                                <option value="mined">Замінована</option>
+                                <option value="unconfirmed">Непідтверджена</option>
+                                <option value="archived">Архів</option>
+                                <option value="demined">Розмінована</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="priority" class="form-label">Пріоритет</label>
+                            <select class="form-select" id="priority" required>
+                                <option value="high">Високий</option>
+                                <option value="medium">Середній</option>
+                                <option value="low">Низький</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="region" class="form-label">Регіон</label>
+                            <select class="form-select" id="region" required>
+                                <!-- Will be populated dynamically -->
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="button" class="btn btn-primary" id="saveObject">Зберегти</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add User Modal -->
+    <div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addUserModalLabel">Додати користувача</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addUserForm">
+                        <div class="mb-3">
+                            <label for="username" class="form-label">Ім'я користувача</label>
+                            <input type="text" class="form-control" id="username" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="fullName" class="form-label">Повне ім'я</label>
+                            <input type="text" class="form-control" id="fullName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Пароль</label>
+                            <input type="password" class="form-control" id="password" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="role" class="form-label">Роль</label>
+                            <select class="form-select" id="role" required>
+                                <option value="citizen">Громадянин</option>
+                                <option value="sapper">Сапер</option>
+                                <option value="moderator">Модератор</option>
+                                <option value="admin">Адміністратор</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="button" class="btn btn-primary" id="saveUser">Зберегти</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap" async defer></script>
+    <script src="/static/js/admin_panel.js"></script>
+</body>
+</html> 

@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Адміністративна карта | MineMap.UA</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #map {
+            height: calc(100vh - 56px);
+            width: 100%;
+        }
+        .navbar {
+            background-color: #343a40;
+        }
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .status-legend {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            gap: 15px;
+            z-index: 1000;
+        }
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+        .status-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+        .purple { background-color: #8b5cf6; }
+        .red { background-color: #ef4444; }
+        .yellow { background-color: #f59e0b; }
+        .gray { background-color: #6b7280; }
+        .green { background-color: #10b981; }
+        .map-controls {
+            position: absolute;
+            top: 80px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 1000;
+        }
+        .map-control-btn {
+            width: 40px;
+            height: 40px;
+            background-color: white;
+            border: none;
+            border-radius: 4px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .map-control-btn:hover {
+            background-color: #f8f9fa;
+        }
+        .btn-group-vertical {
+            position: absolute;
+            bottom: 100px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .admin-controls {
+            position: absolute;
+            top: 80px;
+            left: 20px;
+            width: 300px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            z-index: 1000;
+        }
+        .user-role-badge {
+            background-color: #6f42c1;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            margin-left: 10px;
+        }
+        .object-item {
+            padding: 10px;
+            border-bottom: 1px solid #e9ecef;
+            cursor: pointer;
+        }
+        .object-item:hover {
+            background-color: #f8f9fa;
+        }
+        .priority-badge {
+            font-size: 0.7rem;
+            padding: 0.2em 0.6em;
+            border-radius: 10px;
+        }
+        .high { background-color: #dc3545; color: white; }
+        .medium { background-color: #fd7e14; color: white; }
+        .low { background-color: #20c997; color: white; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-exclamation-triangle-fill" viewBox="0 0 16 16">
+                    <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+                </svg>
+                Система інформування про вибухонебезпечні предмети
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/map/admin">Карта <span class="user-role-badge">{{ 'Адміністратор' if user.role == 'admin' else 'Модератор' }}</span></a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/admin/panel">Адмін-панель</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/profile">Профіль</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/logout">Вихід</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div id="map"></div>
+
+    <div class="admin-controls">
+        <h6>Адміністративні інструменти</h6>
+        
+        <div class="mb-3">
+            <label for="filterStatus" class="form-label">Фільтр за статусом</label>
+            <select class="form-select form-select-sm" id="filterStatus">
+                <option value="all">Всі статуси</option>
+                <option value="secret">Секретні</option>
+                <option value="mined">Заміновані</option>
+                <option value="unconfirmed">Непідтверджені</option>
+                <option value="archived">Архівні</option>
+                <option value="demined">Розміновані</option>
+            </select>
+        </div>
+        
+        <div class="mb-3">
+            <label for="filterRegion" class="form-label">Фільтр за регіоном</label>
+            <select class="form-select form-select-sm" id="filterRegion">
+                <option value="all">Всі регіони</option>
+                <!-- Will be populated dynamically -->
+            </select>
+        </div>
+        
+        <div class="mb-3">
+            <label for="filterPriority" class="form-label">Фільтр за пріоритетом</label>
+            <select class="form-select form-select-sm" id="filterPriority">
+                <option value="all">Всі пріоритети</option>
+                <option value="high">Високий</option>
+                <option value="medium">Середній</option>
+                <option value="low">Низький</option>
+            </select>
+        </div>
+        
+        <div class="mb-3">
+            <button id="applyFilters" class="btn btn-sm btn-primary">Застосувати фільтри</button>
+            <button id="resetFilters" class="btn btn-sm btn-outline-secondary ms-2">Скинути</button>
+        </div>
+        
+        <hr>
+        
+        <div class="mb-3">
+            <label class="form-label">Останні додані об'єкти</label>
+            <div id="recentObjects" class="overflow-auto" style="max-height: 200px;">
+                <!-- Will be populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <div class="status-legend">
+        <div class="status-item">
+            <div class="status-color purple"></div>
+            <span>Секретна</span>
+        </div>
+        <div class="status-item">
+            <div class="status-color red"></div>
+            <span>Замінована</span>
+        </div>
+        <div class="status-item">
+            <div class="status-color yellow"></div>
+            <span>Непідтверджена</span>
+        </div>
+        <div class="status-item">
+            <div class="status-color gray"></div>
+            <span>Архів</span>
+        </div>
+        <div class="status-item">
+            <div class="status-color green"></div>
+            <span>Розмінована</span>
+        </div>
+    </div>
+
+    <div class="map-controls">
+        <button class="map-control-btn" id="zoomIn" title="Збільшити">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-lg" viewBox="0 0 16 16">
+                <path d="M8 0a1 1 0 0 1 1 1v6h6a1 1 0 1 1 0 2H9v6a1 1 0 1 1-2 0V9H1a1 1 0 0 1 0-2h6V1a1 1 0 0 1 1-1z"/>
+            </svg>
+        </button>
+        <button class="map-control-btn" id="zoomOut" title="Зменшити">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-dash-lg" viewBox="0 0 16 16">
+                <path d="M0 8a1 1 0 0 1 1-1h14a1 1 0 1 1 0 2H1a1 1 0 0 1-1-1z"/>
+            </svg>
+        </button>
+        <button class="map-control-btn" id="layers" title="Шари">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layers" viewBox="0 0 16 16">
+                <path d="M8.235 1.559a.5.5 0 0 0-.47 0l-7.5 4a.5.5 0 0 0 0 .882L3.188 8 .264 9.559a.5.5 0 0 0 0 .882l7.5 4a.5.5 0 0 0 .47 0l7.5-4a.5.5 0 0 0 0-.882L12.813 8l2.922-1.559a.5.5 0 0 0 0-.882l-7.5-4zm3.515 7.008L14.438 10 8 13.433 1.562 10 4.25 8.567l3.515 1.874a.5.5 0 0 0 .47 0l3.515-1.874zM8 9.433 1.562 6 8 2.567 14.438 6 8 9.433z"/>
+            </svg>
+        </button>
+        <button class="map-control-btn" id="route" title="Маршрут">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-signpost-split" viewBox="0 0 16 16">
+                <path d="M7 7V1.414a1 1 0 0 1 2 0V2h5a1 1 0 0 1 .8.4l.975 1.3a.5.5 0 0 1 0 .6L14.8 5.6a1 1 0 0 1-.8.4H9v10H7v-5H2a1 1 0 0 1-.8-.4L.225 9.3a.5.5 0 0 1 0-.6L1.2 7.4A1 1 0 0 1 2 7h5zm1 3V8H2l-.75 1L2 10h6zm0-5h6l.75-1L14 3H8v2z"/>
+            </svg>
+        </button>
+    </div>
+
+    <div class="btn-group-vertical">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addObjectModal">
+            <i class="bi bi-plus-lg"></i> Додати об'єкт
+        </button>
+        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#updateStatusModal">
+            <i class="bi bi-check2-circle"></i> Змінити статус
+        </button>
+        <button class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteObjectModal">
+            <i class="bi bi-trash"></i> Видалити об'єкт
+        </button>
+        <button class="btn btn-info text-white" data-bs-toggle="modal" data-bs-target="#exportDataModal">
+            <i class="bi bi-download"></i> Експорт даних
+        </button>
+    </div>
+
+    <!-- Modal for adding new object -->
+    <div class="modal fade" id="addObjectModal" tabindex="-1" aria-labelledby="addObjectModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addObjectModalLabel">Додати новий об'єкт</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addObjectForm">
+                        <div class="mb-3">
+                            <label for="title" class="form-label">Назва</label>
+                            <input type="text" class="form-control" id="title" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Опис</label>
+                            <textarea class="form-control" id="description" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="latitude" class="form-label">Широта</label>
+                            <input type="number" step="any" class="form-control" id="latitude" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="longitude" class="form-label">Довгота</label>
+                            <input type="number" step="any" class="form-control" id="longitude" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="status" class="form-label">Статус</label>
+                            <select class="form-select" id="status" required>
+                                <option value="secret">Секретна</option>
+                                <option value="mined">Замінована</option>
+                                <option value="unconfirmed">Непідтверджена</option>
+                                <option value="archived">Архів</option>
+                                <option value="demined">Розмінована</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="priority" class="form-label">Пріоритет</label>
+                            <select class="form-select" id="priority" required>
+                                <option value="high">Високий</option>
+                                <option value="medium">Середній</option>
+                                <option value="low">Низький</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="region" class="form-label">Регіон</label>
+                            <select class="form-select" id="region" required>
+                                <!-- Will be populated dynamically -->
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="button" class="btn btn-primary" id="saveObject">Зберегти</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for updating status -->
+    <div class="modal fade" id="updateStatusModal" tabindex="-1" aria-labelledby="updateStatusModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="updateStatusModalLabel">Змінити статус об'єкта</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="updateStatusForm">
+                        <div class="mb-3">
+                            <label for="objectId" class="form-label">Вибрати об'єкт</label>
+                            <select class="form-select" id="objectId" required>
+                                <!-- Will be populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="newStatus" class="form-label">Новий статус</label>
+                            <select class="form-select" id="newStatus" required>
+                                <option value="secret">Секретна</option>
+                                <option value="mined">Замінована</option>
+                                <option value="unconfirmed">Непідтверджена</option>
+                                <option value="archived">Архів</option>
+                                <option value="demined">Розмінована</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="statusNote" class="form-label">Примітка</label>
+                            <textarea class="form-control" id="statusNote" rows="3"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="button" class="btn btn-success" id="saveStatus">Зберегти</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for deleting object -->
+    <div class="modal fade" id="deleteObjectModal" tabindex="-1" aria-labelledby="deleteObjectModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteObjectModalLabel">Видалити об'єкт</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="deleteObjectForm">
+                        <div class="mb-3">
+                            <label for="deleteObjectId" class="form-label">Вибрати об'єкт для видалення</label>
+                            <select class="form-select" id="deleteObjectId" required>
+                                <!-- Will be populated dynamically -->
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="deleteReason" class="form-label">Причина видалення</label>
+                            <textarea class="form-control" id="deleteReason" rows="3" required></textarea>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="confirmDelete" required>
+                            <label class="form-check-label" for="confirmDelete">
+                                Я підтверджую, що хочу видалити цей об'єкт
+                            </label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="button" class="btn btn-danger" id="deleteObject">Видалити</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for exporting data -->
+    <div class="modal fade" id="exportDataModal" tabindex="-1" aria-labelledby="exportDataModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="exportDataModalLabel">Експорт даних</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="exportDataForm">
+                        <div class="mb-3">
+                            <label class="form-label">Вибрати формат:</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="exportFormat" id="formatJson" value="json" checked>
+                                <label class="form-check-label" for="formatJson">
+                                    JSON
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="exportFormat" id="formatCsv" value="csv">
+                                <label class="form-check-label" for="formatCsv">
+                                    CSV
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="exportFormat" id="formatXml" value="xml">
+                                <label class="form-check-label" for="formatXml">
+                                    XML
+                                </label>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Включити дані:</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="includeObjects" checked>
+                                <label class="form-check-label" for="includeObjects">
+                                    Вибухонебезпечні об'єкти
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="includeRegions">
+                                <label class="form-check-label" for="includeRegions">
+                                    Регіони
+                                </label>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="exportRegion" class="form-label">Регіон:</label>
+                            <select class="form-select" id="exportRegion">
+                                <option value="all">Всі регіони</option>
+                                <!-- Will be populated dynamically -->
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="button" class="btn btn-info text-white" id="exportData">Експортувати</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap" async defer></script>
+    <script src="/static/js/admin_map.js"></script>
+</body>
+</html> 
