@@ -67,10 +67,11 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         raise credentials_exception
     
     async with get_connection() as conn:
-        user = await conn.fetchrow(
-            "SELECT id, username, email, full_name, role FROM users WHERE username = $1",
-            username
+        cursor = await conn.execute(
+            "SELECT id, username, email, full_name, role FROM users WHERE username = ?",
+            (username,)
         )
+        user = await cursor.fetchone()
     
     if user is None:
         raise credentials_exception
@@ -101,10 +102,11 @@ async def map_page(request: Request):
 @app.post("/token")
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
     async with get_connection() as conn:
-        user = await conn.fetchrow(
-            "SELECT id, username, password, email, full_name, role FROM users WHERE username = $1",
-            form_data.username
+        cursor = await conn.execute(
+            "SELECT id, username, password, email, full_name, role FROM users WHERE username = ?",
+            (form_data.username,)
         )
+        user = await cursor.fetchone()
     
     if not user or not verify_password(form_data.password, user["password"]):
         raise HTTPException(
@@ -124,10 +126,11 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 @app.post("/login")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     async with get_connection() as conn:
-        user = await conn.fetchrow(
-            "SELECT id, username, password, role FROM users WHERE username = $1",
-            form_data.username
+        cursor = await conn.execute(
+            "SELECT id, username, password, role FROM users WHERE username = ?",
+            (form_data.username,)
         )
+        user = await cursor.fetchone()
     
     if not user or not verify_password(form_data.password, user["password"]):
         raise HTTPException(
@@ -159,10 +162,11 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 async def register_user(user: UserCreate):
     async with get_connection() as conn:
         # Check if user exists
-        existing_user = await conn.fetchval(
-            "SELECT id FROM users WHERE username = $1 OR email = $2",
-            user.username, user.email
+        cursor = await conn.execute(
+            "SELECT id FROM users WHERE username = ? OR email = ?",
+            (user.username, user.email)
         )
+        existing_user = await cursor.fetchone()
         
         if existing_user:
             raise HTTPException(
@@ -172,20 +176,21 @@ async def register_user(user: UserCreate):
         
         # Create new user
         hashed_password = get_password_hash(user.password)
-        user_id = await conn.fetchval(
+        await conn.execute(
             """
             INSERT INTO users (username, email, password, full_name, role)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING id
+            VALUES (?, ?, ?, ?, ?)
             """,
-            user.username, user.email, hashed_password, user.full_name, user.role
+            (user.username, user.email, hashed_password, user.full_name, user.role)
         )
+        await conn.commit()
         
         # Get created user
-        created_user = await conn.fetchrow(
-            "SELECT id, username, email, full_name, role FROM users WHERE id = $1",
-            user_id
+        cursor = await conn.execute(
+            "SELECT id, username, email, full_name, role FROM users WHERE username = ?",
+            (user.username,)
         )
+        created_user = await cursor.fetchone()
         
         # Create token for immediate login
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -258,7 +263,8 @@ async def logout(request: Request):
 @app.get("/api/regions", response_model=List[RegionResponse])
 async def get_regions():
     async with get_connection() as conn:
-        regions = await conn.fetch("SELECT * FROM regions ORDER BY name")
+        cursor = await conn.execute("SELECT * FROM regions ORDER BY name")
+        regions = await cursor.fetchall()
     
     return [
         RegionResponse(
@@ -274,15 +280,14 @@ async def get_regions():
 @app.get("/api/explosive-objects", response_model=List[ExplosiveObjectResponse])
 async def get_explosive_objects():
     async with get_connection() as conn:
-        objects = await conn.fetch(
-            """
+        cursor = await conn.execute("""
             SELECT eo.*, r.name as region_name, u.username as reported_by_username
             FROM explosive_objects eo
             JOIN regions r ON eo.region_id = r.id
             JOIN users u ON eo.reported_by = u.id
             ORDER BY eo.reported_at DESC
-            """
-        )
+        """)
+        objects = await cursor.fetchall()
     
     return [
         ExplosiveObjectResponse(
@@ -309,7 +314,8 @@ async def create_explosive_object(
 ):
     async with get_connection() as conn:
         # Check if region exists
-        region = await conn.fetchrow("SELECT id FROM regions WHERE id = $1", object_data.region_id)
+        cursor = await conn.execute("SELECT id FROM regions WHERE id = ?", (object_data.region_id,))
+        region = await cursor.fetchone()
         if not region:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -317,29 +323,35 @@ async def create_explosive_object(
             )
         
         # Create new object
-        object_id = await conn.fetchval(
+        await conn.execute(
             """
             INSERT INTO explosive_objects 
             (title, description, latitude, longitude, status, priority, region_id, reported_by)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            object_data.title, object_data.description, object_data.latitude, 
+            (object_data.title, object_data.description, object_data.latitude, 
             object_data.longitude, object_data.status, object_data.priority, 
-            object_data.region_id, current_user.id
+            object_data.region_id, current_user.id)
         )
+        await conn.commit()
+        
+        # Get created object ID (last inserted row id)
+        cursor = await conn.execute("SELECT last_insert_rowid()")
+        object_id = await cursor.fetchone()
+        object_id = object_id[0]
         
         # Get created object
-        created_object = await conn.fetchrow(
+        cursor = await conn.execute(
             """
             SELECT eo.*, r.name as region_name, u.username as reported_by_username
             FROM explosive_objects eo
             JOIN regions r ON eo.region_id = r.id
             JOIN users u ON eo.reported_by = u.id
-            WHERE eo.id = $1
+            WHERE eo.id = ?
             """,
-            object_id
+            (object_id,)
         )
+        created_object = await cursor.fetchone()
         
         return ExplosiveObjectResponse(
             id=created_object["id"],
