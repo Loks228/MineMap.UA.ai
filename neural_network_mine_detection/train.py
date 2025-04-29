@@ -1,82 +1,53 @@
 import os
 import argparse
 import matplotlib.pyplot as plt
-from model import create_model, prepare_data, train_model
-
-def plot_training_history(history):
-    """Визуализация процесса обучения"""
-    plt.figure(figsize=(12, 4))
-    
-    # График точности
-    plt.subplot(1, 2, 1)
-    plt.plot(history.history['accuracy'])
-    plt.plot(history.history['val_accuracy'])
-    plt.title('Точность модели')
-    plt.ylabel('Точность')
-    plt.xlabel('Эпоха')
-    plt.legend(['Обучение', 'Валидация'], loc='lower right')
-    
-    # График функции потерь
-    plt.subplot(1, 2, 2)
-    plt.plot(history.history['loss'])
-    plt.plot(history.history['val_loss'])
-    plt.title('Функция потерь')
-    plt.ylabel('Потери')
-    plt.xlabel('Эпоха')
-    plt.legend(['Обучение', 'Валидация'], loc='upper right')
-    
-    plt.tight_layout()
-    plt.savefig('training_history.png')
-    plt.show()
+from model import create_yolo_model, train_yolo_model, fine_tune_yolo, evaluate_yolo_model
 
 def main():
-    parser = argparse.ArgumentParser(description="Обучение модели обнаружения взрывоопасных предметов")
-    parser.add_argument("--data", type=str, required=True, help="Путь к директории с данными")
-    parser.add_argument("--output", type=str, default="mine_detection_model.h5", help="Путь для сохранения модели")
-    parser.add_argument("--epochs", type=int, default=20, help="Количество эпох обучения")
-    parser.add_argument("--batch_size", type=int, default=32, help="Размер батча")
+    parser = argparse.ArgumentParser(description="Обучение модели YOLO для обнаружения взрывоопасных предметов")
+    parser.add_argument("--data", type=str, required=True, help="Путь к YAML файлу с конфигурацией данных")
+    parser.add_argument("--output", type=str, default="runs/train", help="Директория для сохранения результатов")
+    parser.add_argument("--epochs", type=int, default=50, help="Количество эпох обучения")
+    parser.add_argument("--batch_size", type=int, default=16, help="Размер батча")
+    parser.add_argument("--pretrained", action="store_true", help="Использовать предобученную модель")
+    parser.add_argument("--fine_tune", action="store_true", help="Дообучить предобученную модель")
+    parser.add_argument("--img_size", type=int, default=640, help="Размер изображения для обучения")
     args = parser.parse_args()
     
-    # Проверка наличия директории с данными
+    # Проверка наличия файла данных
     if not os.path.exists(args.data):
-        print(f"Ошибка: директория с данными '{args.data}' не найдена.")
+        print(f"Ошибка: файл данных '{args.data}' не найден.")
         return
     
-    # Проверка структуры директории с данными
-    required_subdirs = ['dangerous', 'safe']
-    missing_dirs = [d for d in required_subdirs if not os.path.exists(os.path.join(args.data, d))]
-    
-    if missing_dirs:
-        print(f"Ошибка: в директории '{args.data}' отсутствуют подкаталоги: {', '.join(missing_dirs)}")
-        print("Структура данных должна быть:")
-        print(f" - {args.data}/dangerous/")
-        print(f" - {args.data}/safe/")
-        return
-    
-    print("Начинаем обучение модели...")
-    print(f"Данные: {args.data}")
-    print(f"Выходной файл модели: {args.output}")
+    print("Начинаем обучение модели YOLO...")
+    print(f"Файл данных: {args.data}")
+    print(f"Выходная директория: {args.output}")
     print(f"Эпохи: {args.epochs}")
     print(f"Размер батча: {args.batch_size}")
+    print(f"Размер изображения: {args.img_size}x{args.img_size}")
+    print(f"Использование предобученной модели: {'Да' if args.pretrained else 'Нет'}")
+    print(f"Fine-tuning: {'Да' if args.fine_tune else 'Нет'}")
     
     # Создание модели
-    model = create_model()
+    model = create_yolo_model(pretrained=args.pretrained)
     print("Модель создана.")
     
-    # Подготовка данных
-    train_generator, validation_generator = prepare_data(args.data)
-    print("Данные подготовлены.")
+    # Обучение или fine-tuning модели
+    if args.fine_tune and args.pretrained:
+        print("Выполняем fine-tuning предобученной модели...")
+        trained_model = fine_tune_yolo(model, args.data, project_name=args.output)
+    else:
+        print("Обучаем модель...")
+        trained_model = train_yolo_model(model, args.data, project_name=args.output)
     
-    # Обучение модели
-    trained_model, history = train_model(model, train_generator, validation_generator)
     print("Обучение завершено.")
     
-    # Сохранение модели
-    trained_model.save(args.output)
-    print(f"Модель сохранена в {args.output}")
+    # Оценка модели
+    print("Оцениваем модель...")
+    results = evaluate_yolo_model(trained_model, args.data)
     
-    # Визуализация процесса обучения
-    plot_training_history(history)
+    print(f"Метрики модели: {results}")
+    print(f"Модель сохранена в директории {args.output}")
 
 if __name__ == "__main__":
     main() 

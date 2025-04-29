@@ -1,132 +1,188 @@
 import tensorflow as tf
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.applications import EfficientNetB0
-from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout
-from tensorflow.keras.models import Model
-import matplotlib.pyplot as plt
 import numpy as np
 import os
+import cv2
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+import matplotlib.pyplot as plt
+from ultralytics import YOLO
 
 # Константы
-IMG_SIZE = 224  # Стандартный размер для EfficientNet
-BATCH_SIZE = 32
-EPOCHS = 20
+IMG_SIZE = 640  # Стандартный размер для YOLOv8
+BATCH_SIZE = 16
+EPOCHS = 50
 
-def create_model():
-    """Создает модель для классификации взрывоопасных предметов"""
-    # Использование предобученной модели как базы
-    base_model = EfficientNetB0(weights='imagenet', include_top=False, 
-                               input_shape=(IMG_SIZE, IMG_SIZE, 3))
+def create_yolo_model(pretrained=True):
+    """Создает модель YOLOv8 для обнаружения взрывоопасных предметов"""
+    # Загрузка предобученной модели YOLOv8n
+    if pretrained:
+        # Используем предобученную модель YOLOv8n
+        model = YOLO('yolov8n.pt')
+    else:
+        # Создаем новую модель с нуля
+        model = YOLO('yolov8n.yaml')
     
-    # "Заморозить" веса базовой модели
-    base_model.trainable = False
+    return model
+
+def prepare_yolo_data(data_yaml_path):
+    """
+    Подготовка данных для YOLO
     
-    # Добавление новых слоев
-    x = base_model.output
-    x = GlobalAveragePooling2D()(x)
-    x = Dense(128, activation='relu')(x)
-    x = Dropout(0.5)(x)  # Для предотвращения переобучения
+    Parameters:
+    data_yaml_path (str): Путь к файлу YAML с конфигурацией данных
     
-    # Финальный слой с одним нейроном и sigmoid для получения вероятности
-    predictions = Dense(1, activation='sigmoid')(x)
+    Returns:
+    str: Путь к файлу конфигурации данных
+    """
+    # YOLO использует файл YAML для определения путей к данным
+    # Этот файл должен содержать:
+    # - пути к тренировочным и валидационным данным
+    # - список классов
     
-    model = Model(inputs=base_model.input, outputs=predictions)
+    return data_yaml_path
+
+def train_yolo_model(model, data_yaml_path, project_name='mine_detection'):
+    """
+    Обучение модели YOLOv8
     
-    # Компиляция модели
-    model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
-        loss='binary_crossentropy',
-        metrics=['accuracy', tf.keras.metrics.Precision(), tf.keras.metrics.Recall()]
+    Parameters:
+    model: Модель YOLO
+    data_yaml_path (str): Путь к файлу конфигурации данных
+    project_name (str): Имя проекта для сохранения результатов
+    
+    Returns:
+    YOLO: Обученная модель
+    """
+    # Запуск обучения модели
+    results = model.train(
+        data=data_yaml_path,
+        epochs=EPOCHS,
+        batch=BATCH_SIZE,
+        imgsz=IMG_SIZE,
+        project=project_name,
+        name='train',
+        patience=5,  # Для ранней остановки
+        save=True,  # Сохранять лучшие модели
+        device='0' if tf.config.list_physical_devices('GPU') else 'cpu'
     )
     
     return model
 
-def prepare_data(data_dir):
-    """Подготовка генераторов данных для обучения и валидации"""
-    # Аугментация для тренировочных данных
-    train_datagen = ImageDataGenerator(
-        rescale=1./255,
-        rotation_range=20,
-        width_shift_range=0.2,
-        height_shift_range=0.2,
-        shear_range=0.2,
-        zoom_range=0.2,
-        horizontal_flip=True,
-        fill_mode='nearest',
-        validation_split=0.2  # 20% данных используем для валидации
+def fine_tune_yolo(model, data_yaml_path, project_name='mine_detection'):
+    """
+    Дообучение (fine-tuning) модели YOLOv8
+    
+    Parameters:
+    model: Модель YOLO
+    data_yaml_path (str): Путь к файлу конфигурации данных
+    project_name (str): Имя проекта для сохранения результатов
+    
+    Returns:
+    YOLO: Дообученная модель
+    """
+    # Дообучение с меньшей скоростью обучения
+    results = model.train(
+        data=data_yaml_path,
+        epochs=20,
+        batch=BATCH_SIZE,
+        imgsz=IMG_SIZE,
+        project=project_name,
+        name='fine_tune',
+        patience=10,
+        save=True,
+        device='0' if tf.config.list_physical_devices('GPU') else 'cpu',
+        lr0=0.0001  # Меньшая скорость обучения для fine-tuning
     )
     
-    # Только нормализация для валидационных данных
-    val_datagen = ImageDataGenerator(
-        rescale=1./255,
-        validation_split=0.2
-    )
-    
-    # Генератор тренировочных данных
-    train_generator = train_datagen.flow_from_directory(
-        directory=data_dir,
-        target_size=(IMG_SIZE, IMG_SIZE),
-        batch_size=BATCH_SIZE,
-        class_mode='binary',  # 'binary' потому что у нас по сути задача бинарной классификации
-        subset='training'
-    )
-    
-    # Генератор валидационных данных
-    validation_generator = val_datagen.flow_from_directory(
-        directory=data_dir,
-        target_size=(IMG_SIZE, IMG_SIZE),
-        batch_size=BATCH_SIZE,
-        class_mode='binary',
-        subset='validation'
-    )
-    
-    return train_generator, validation_generator
+    return model
 
-def train_model(model, train_generator, validation_generator):
-    """Обучение модели"""
-    # Callback для ранней остановки
-    early_stopping = tf.keras.callbacks.EarlyStopping(
-        monitor='val_loss',
-        patience=5,
-        restore_best_weights=True
-    )
+def evaluate_yolo_model(model, data_yaml_path):
+    """
+    Оценка модели YOLOv8
     
-    # Уменьшение learning rate при плато
-    reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(
-        monitor='val_loss',
-        factor=0.2,
-        patience=3,
-        min_lr=0.00001
-    )
+    Parameters:
+    model: Модель YOLO
+    data_yaml_path (str): Путь к файлу конфигурации данных
     
-    # Обучение модели
-    history = model.fit(
-        train_generator,
-        steps_per_epoch=train_generator.samples // BATCH_SIZE,
-        epochs=EPOCHS,
-        validation_data=validation_generator,
-        validation_steps=validation_generator.samples // BATCH_SIZE,
-        callbacks=[early_stopping, reduce_lr]
-    )
+    Returns:
+    dict: Метрики оценки модели
+    """
+    # Валидация модели
+    results = model.val(data=data_yaml_path)
     
-    # Разблокируем верхние слои базовой модели и продолжим обучение с меньшим learning rate
-    for layer in model.layers[:-3]:
-        layer.trainable = True
+    return results
+
+def predict_with_yolo(model, image_path, conf_threshold=0.25):
+    """
+    Предсказание с использованием модели YOLOv8
     
-    model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),  # меньший learning rate
-        loss='binary_crossentropy',
-        metrics=['accuracy', tf.keras.metrics.Precision(), tf.keras.metrics.Recall()]
-    )
+    Parameters:
+    model: Модель YOLO
+    image_path (str): Путь к изображению для предсказания
+    conf_threshold (float): Порог уверенности для детекции
     
-    # Продолжаем обучение
-    fine_tuning_history = model.fit(
-        train_generator,
-        steps_per_epoch=train_generator.samples // BATCH_SIZE,
-        epochs=10,  # меньше эпох для fine-tuning
-        validation_data=validation_generator,
-        validation_steps=validation_generator.samples // BATCH_SIZE,
-        callbacks=[early_stopping, reduce_lr]
-    )
+    Returns:
+    list: Список обнаруженных объектов
+    """
+    # Выполнение предсказания
+    results = model.predict(image_path, conf=conf_threshold)
     
-    return model, history 
+    return results
+
+def create_yolo_dataset_yaml(train_path, val_path, class_names, output_path='data.yaml'):
+    """
+    Создает файл YAML для данных YOLO
+    
+    Parameters:
+    train_path (str): Путь к тренировочным данным
+    val_path (str): Путь к валидационным данным
+    class_names (list): Список имен классов
+    output_path (str): Путь для сохранения файла YAML
+    
+    Returns:
+    str: Путь к созданному файлу YAML
+    """
+    # Создание содержимого YAML файла
+    yaml_content = f"""
+train: {train_path}
+val: {val_path}
+
+nc: {len(class_names)}
+names: {class_names}
+"""
+    
+    # Сохранение файла
+    with open(output_path, 'w') as f:
+        f.write(yaml_content)
+    
+    return output_path
+
+def convert_dataset_to_yolo_format(source_dir, output_dir):
+    """
+    Конвертирует датасет из формата классификации в формат YOLO (детекция объектов)
+    
+    Parameters:
+    source_dir (str): Путь к исходному датасету
+    output_dir (str): Путь для сохранения конвертированного датасета
+    
+    Returns:
+    tuple: Пути к тренировочным и валидационным данным
+    """
+    # Создание директорий
+    train_dir = os.path.join(output_dir, 'train')
+    val_dir = os.path.join(output_dir, 'val')
+    
+    os.makedirs(train_dir, exist_ok=True)
+    os.makedirs(os.path.join(train_dir, 'images'), exist_ok=True)
+    os.makedirs(os.path.join(train_dir, 'labels'), exist_ok=True)
+    
+    os.makedirs(val_dir, exist_ok=True)
+    os.makedirs(os.path.join(val_dir, 'images'), exist_ok=True)
+    os.makedirs(os.path.join(val_dir, 'labels'), exist_ok=True)
+    
+    # Здесь должен быть код для конвертации аннотаций
+    # Для простой конвертации классификационных данных в данные для детекции
+    # можно создать аннотации, которые покрывают большую часть изображения
+    
+    print("Необходимо реализовать логику конвертации аннотаций в формат YOLO!")
+    
+    return train_dir, val_dir 

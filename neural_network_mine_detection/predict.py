@@ -1,118 +1,124 @@
-import tensorflow as tf
-import numpy as np
-from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing import image
-import argparse
 import os
-import time
+import argparse
+import cv2
 import matplotlib.pyplot as plt
-from PIL import Image, ImageDraw, ImageFont
+import time
+from model import predict_with_yolo
+from ultralytics import YOLO
 
-def load_and_prepare_image(image_path, target_size=(224, 224)):
-    """Загрузка и подготовка изображения для предсказания"""
-    img = image.load_img(image_path, target_size=target_size)
-    img_array = image.img_to_array(img)
-    img_array = np.expand_dims(img_array, axis=0)
-    img_array = img_array / 255.0  # Нормализация
-    return img_array, img
+def visualize_yolo_prediction(results, class_names, confidence_threshold=0.25, save_path=None):
+    """
+    Визуализация результатов предсказания YOLO
+    
+    Parameters:
+    results: Результаты предсказания YOLO
+    class_names: Список имен классов
+    confidence_threshold: Порог уверенности для отображения
+    save_path: Путь для сохранения результата
+    """
+    if not results:
+        print("Нет результатов для визуализации!")
+        return
+    
+    for i, result in enumerate(results):
+        # Получаем изображение с размеченными обнаружениями
+        img = result.plot()
+        
+        # Отображаем изображение
+        plt.figure(figsize=(12, 8))
+        plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        plt.axis('off')
+        
+        # Выводим статус и информацию
+        detections = []
+        has_mine = False
+        highest_conf = 0
+        
+        for box in result.boxes:
+            class_id = int(box.cls.item())
+            confidence = float(box.conf.item())
+            
+            if confidence >= confidence_threshold:
+                class_name = class_names[class_id]
+                detections.append((class_name, confidence))
+                
+                if class_name == "mine" and confidence > highest_conf:
+                    highest_conf = confidence
+                    has_mine = True
+        
+        # Определяем общий статус
+        if has_mine and highest_conf >= 0.8:
+            status = "ОПАСНО!"
+            color = 'red'
+        elif has_mine and highest_conf >= 0.3:
+            status = "ТРЕБУЕТ ПРОВЕРКИ"
+            color = 'orange'
+        else:
+            status = "ВЕРОЯТНО БЕЗОПАСНО"
+            color = 'green'
+        
+        # Добавляем информацию на график
+        plt.title(f"{status}", fontsize=16, color=color, fontweight='bold')
+        
+        # Выводим информацию о обнаруженных объектах
+        print(f"\nСтатус: {status}")
+        print("Обнаруженные объекты:")
+        
+        for name, conf in detections:
+            print(f"- {name}: {conf*100:.1f}% уверенности")
+            
+        if not detections:
+            print("Объекты не обнаружены")
+        
+        # Сохраняем результат
+        if save_path:
+            result_filename = f"result_{os.path.basename(save_path)}" if i == 0 else f"result_{i}_{os.path.basename(save_path)}"
+            result_path = os.path.join(os.path.dirname(save_path), result_filename)
+            plt.savefig(result_path)
+            print(f"Результат сохранен как {result_path}")
+        
+        plt.show()
 
-def predict_danger(model_path, image_path):
-    """Предсказание опасности изображения"""
+def main():
+    parser = argparse.ArgumentParser(description="Обнаружение взрывоопасных предметов с помощью YOLO")
+    parser.add_argument("--model", type=str, required=True, help="Путь к файлу модели YOLO (.pt)")
+    parser.add_argument("--image", type=str, required=True, help="Путь к изображению для анализа")
+    parser.add_argument("--conf", type=float, default=0.25, help="Порог уверенности (0-1)")
+    parser.add_argument("--classes", nargs='+', default=["mine", "not_dangerous"], help="Имена классов")
+    args = parser.parse_args()
+    
+    # Проверка наличия файлов
+    if not os.path.exists(args.model):
+        print(f"Ошибка: файл модели '{args.model}' не найден.")
+        return
+        
+    if not os.path.exists(args.image):
+        print(f"Ошибка: файл изображения '{args.image}' не найден.")
+        return
+    
+    print(f"Модель: {args.model}")
+    print(f"Изображение: {args.image}")
+    print(f"Порог уверенности: {args.conf}")
+    print(f"Классы: {args.classes}")
+    
     # Загрузка модели
     try:
-        model = load_model(model_path)
-        print(f"Модель загружена из {model_path}")
+        model = YOLO(args.model)
+        print("Модель успешно загружена.")
     except Exception as e:
         print(f"Ошибка загрузки модели: {e}")
-        return None
+        return
     
-    # Загрузка и подготовка изображения
-    try:
-        img_array, original_img = load_and_prepare_image(image_path)
-    except Exception as e:
-        print(f"Ошибка загрузки изображения: {e}")
-        return None
-    
-    # Замер времени предсказания
+    # Выполнение предсказания и замер времени
     start_time = time.time()
-    prediction = model.predict(img_array)[0][0]
+    results = predict_with_yolo(model, args.image, conf_threshold=args.conf)
     end_time = time.time()
     
     inference_time = end_time - start_time
     print(f"Время инференса: {inference_time:.4f} секунд")
     
-    # Подготовка результата
-    percentage = prediction * 100
+    # Визуализация результатов
+    visualize_yolo_prediction(results, args.classes, args.conf, args.image)
     
-    if percentage >= 80:
-        status = "ОПАСНО!"
-        confidence = f"Вероятность взрывоопасного предмета: {percentage:.1f}%"
-        color = "red"
-    elif percentage >= 30:
-        status = "ТРЕБУЕТ ПРОВЕРКИ"
-        confidence = f"Вероятность взрывоопасного предмета: {percentage:.1f}%"
-        color = "orange"
-    else:
-        status = "БЕЗОПАСНО"
-        confidence = f"Вероятность взрывоопасного предмета: {percentage:.1f}%"
-        color = "green"
-    
-    # Визуализация результата
-    visualize_prediction(original_img, status, confidence, color, image_path)
-    
-    return percentage, status, confidence, inference_time
-
-def visualize_prediction(img, status, confidence, color, save_path=None):
-    """Визуализация предсказания на изображении"""
-    # Преобразование в PIL Image если нужно
-    if not isinstance(img, Image.Image):
-        img = Image.fromarray(np.uint8(img))
-    
-    # Создание копии для рисования
-    result_img = img.copy()
-    draw = ImageDraw.Draw(result_img)
-    
-    # Определение цвета
-    color_map = {
-        "red": (255, 0, 0),
-        "orange": (255, 165, 0),
-        "green": (0, 255, 0)
-    }
-    rgb_color = color_map.get(color, (255, 0, 0))
-    
-    # Попытка загрузить шрифт (может потребоваться путь к TTF файлу)
-    try:
-        font = ImageFont.truetype("arial.ttf", 20)
-    except:
-        font = ImageFont.load_default()
-    
-    # Добавление текста статуса
-    draw.text((10, 10), status, fill=rgb_color, font=font)
-    draw.text((10, 40), confidence, fill=rgb_color, font=font)
-    
-    # Отображение или сохранение
-    result_img.show()
-    
-    if save_path:
-        # Создаем имя для результирующего файла
-        base_name = os.path.basename(save_path)
-        dir_name = os.path.dirname(save_path)
-        result_filename = os.path.join(dir_name, f"result_{base_name}")
-        result_img.save(result_filename)
-        print(f"Результат сохранен как {result_filename}")
-
-def main():
-    parser = argparse.ArgumentParser(description="Обнаружение мин и взрывоопасных предметов")
-    parser.add_argument("--model", type=str, required=True, help="Путь к файлу модели (.h5)")
-    parser.add_argument("--image", type=str, required=True, help="Путь к изображению для анализа")
-    args = parser.parse_args()
-    
-    result = predict_danger(args.model, args.image)
-    
-    if result:
-        percentage, status, confidence, _ = result
-        print(f"\n{status}")
-        print(confidence)
-
 if __name__ == "__main__":
     main() 

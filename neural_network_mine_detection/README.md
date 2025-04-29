@@ -78,4 +78,165 @@ python predict.py --model путь/к/модели.h5 --image путь/к/изо
 Для предсказаний:
 - Python 3.7+
 - CPU (GPU не обязателен)
-- 4GB RAM минимум 
+- 4GB RAM минимум
+
+# Обнаружение взрывоопасных предметов с использованием YOLOv8
+
+Этот проект предоставляет инструменты для обучения и использования нейронной сети YOLOv8 для обнаружения взрывоопасных предметов (мин, неразорвавшихся боеприпасов и т.д.) на изображениях.
+
+## Требования
+
+```
+pip install ultralytics opencv-python tensorflow numpy matplotlib
+```
+
+## Структура проекта
+
+- `model.py` - Основной файл с функциями для работы с моделью YOLOv8
+- `example_usage.py` - Пример использования функций для обучения и тестирования модели
+
+## Использование
+
+### 1. Подготовка данных
+
+Для работы с YOLOv8 необходимо подготовить данные в специальном формате:
+
+```
+dataset/
+  ├── train/
+  │   ├── images/
+  │   │   ├── image1.jpg
+  │   │   ├── image2.jpg
+  │   │   └── ...
+  │   └── labels/
+  │       ├── image1.txt
+  │       ├── image2.txt
+  │       └── ...
+  └── val/
+      ├── images/
+      │   ├── image3.jpg
+      │   ├── image4.jpg
+      │   └── ...
+      └── labels/
+          ├── image3.txt
+          ├── image4.txt
+          └── ...
+```
+
+Файлы меток (.txt) должны содержать строки в формате:
+```
+<class> <x_center> <y_center> <width> <height>
+```
+где:
+- `<class>` - индекс класса (начиная с 0)
+- `<x_center>`, `<y_center>` - относительные координаты центра объекта (от 0 до 1)
+- `<width>`, `<height>` - относительная ширина и высота объекта (от 0 до 1)
+
+Для конвертации данных из другого формата можно использовать функцию `convert_dataset_to_yolo_format()`.
+
+### 2. Создание файла конфигурации данных
+
+```python
+from model import create_yolo_dataset_yaml
+
+train_dir = "path/to/dataset/train"
+val_dir = "path/to/dataset/val"
+class_names = ["mine", "not_dangerous"]
+
+data_yaml_path = create_yolo_dataset_yaml(train_dir, val_dir, class_names)
+```
+
+### 3. Обучение модели
+
+#### A. Обучение с нуля
+
+```python
+from model import create_yolo_model, train_yolo_model
+
+# Создание новой модели YOLO
+model = create_yolo_model(pretrained=False)
+
+# Обучение модели
+trained_model = train_yolo_model(model, data_yaml_path)
+```
+
+#### B. Использование предобученной модели и fine-tuning
+
+```python
+from model import create_yolo_model, fine_tune_yolo
+
+# Загрузка предобученной модели
+model = create_yolo_model(pretrained=True)
+
+# Дообучение модели
+fine_tuned_model = fine_tune_yolo(model, data_yaml_path)
+```
+
+### 4. Оценка модели
+
+```python
+from model import evaluate_yolo_model
+
+results = evaluate_yolo_model(fine_tuned_model, data_yaml_path)
+print(f"Метрики модели: {results}")
+```
+
+### 5. Использование модели для предсказаний
+
+```python
+from model import predict_with_yolo
+import cv2
+import matplotlib.pyplot as plt
+
+# Предсказание на одном изображении
+results = predict_with_yolo(fine_tuned_model, "path/to/image.jpg")
+
+# Отображение результатов
+for result in results:
+    img = result.plot()  # Это создает изображение с размеченными обнаружениями
+    plt.figure(figsize=(10, 8))
+    plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    plt.axis('off')
+    plt.show()
+    
+    # Вывод информации о обнаруженных объектах
+    print("\nОбнаруженные объекты:")
+    for box in result.boxes:
+        class_id = int(box.cls.item())
+        class_name = class_names[class_id]
+        confidence = box.conf.item()
+        coords = box.xyxy.tolist()[0]  # [x1, y1, x2, y2]
+        
+        print(f"Класс: {class_name}, Уверенность: {confidence:.2f}, Координаты: {coords}")
+```
+
+## Преимущества YOLO для обнаружения взрывоопасных предметов
+
+1. **Высокая скорость** - модель работает в реальном времени, что критично для полевых условий
+2. **Точность обнаружения** - современные версии YOLO (v8) обеспечивают высокую точность детекции
+3. **Возможность работы на мобильных устройствах** - есть облегченные версии модели для запуска на смартфонах
+4. **Детектирование нескольких объектов** - модель может одновременно находить различные типы взрывоопасных предметов
+5. **Простота переобучения** - можно легко дообучить модель на новых данных
+
+## Особенности подготовки данных
+
+Для эффективного обучения рекомендуется:
+
+1. Собрать разнообразные изображения взрывоопасных предметов в различных условиях и с разных ракурсов
+2. Обеспечить точную разметку данных (bounding boxes)
+3. Использовать аугментацию данных для улучшения устойчивости модели к различным условиям
+4. Сбалансировать классы в наборе данных
+
+## Рекомендации по развертыванию
+
+Для использования модели в реальных условиях рекомендуется:
+
+1. Развертывание на устройстве с GPU для быстрой обработки
+2. Использование TensorRT или ONNX для оптимизации скорости вывода
+3. Интеграция с камерой для обработки видеопотока в реальном времени
+4. Настройка порога уверенности (confidence threshold) для минимизации ложных срабатываний
+
+## Дополнительные ресурсы
+
+- [Официальная документация Ultralytics YOLOv8](https://docs.ultralytics.com/)
+- [Туториал по обучению YOLOv8 на кастомном датасете](https://docs.ultralytics.com/modes/train/) 
