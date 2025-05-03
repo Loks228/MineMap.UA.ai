@@ -12,12 +12,18 @@ from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
 from db import get_connection
 from models import UserCreate, UserLogin, UserResponse, RegionResponse, ExplosiveObjectResponse, ExplosiveObjectCreate
+from cookie_auth import OAuth2PasswordBearerWithCookie
 
 # Load environment variables
 load_dotenv()
 
+# визначаємо корінь проєкту — тут лежить main.py
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Initialize FastAPI
 app = FastAPI(title="Система інформування про вибухонебезпечні предмети")
+
+
 
 # Configure templates and static files
 templates = Jinja2Templates(directory="templates")
@@ -28,7 +34,9 @@ app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY", "your-s
 
 # Configure password security
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+# Заменяем стандартную схему OAuth2 на нашу с поддержкой куки
+# oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme = OAuth2PasswordBearerWithCookie(tokenUrl="token")
 
 # JWT settings
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key")
@@ -85,6 +93,14 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     )
 
 # Main page
+@app.get("/debug/static-images")
+def debug_static_images():
+    path = os.path.join(BASE_DIR, "static", "images")
+    if not os.path.isdir(path):
+        raise HTTPException(500, detail=f"Directory not found: {path}")
+    return {"files": os.listdir(path)}
+    
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
@@ -154,7 +170,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         redirect_url = "/admin/panel"
     
     response = RedirectResponse(url=redirect_url, status_code=status.HTTP_303_SEE_OTHER)
-    response.set_cookie(key="access_token", value=f"Bearer {access_token}", httponly=True)
+    response.set_cookie(key="access_token", value=access_token, httponly=True)
     return response
 
 # Register user with role selection
@@ -212,7 +228,7 @@ async def register_user(user: UserCreate):
         return response_data
 
 # Role-specific map pages
-@app.get("/map/citizen", response_class=HTMLResponse)
+@app.get("/citizen_map", response_class=HTMLResponse)
 async def citizen_map(request: Request, current_user: UserResponse = Depends(get_current_user)):
     if current_user.role != "citizen":
         raise HTTPException(status_code=403, detail="Unauthorized access")
@@ -222,7 +238,7 @@ async def citizen_map(request: Request, current_user: UserResponse = Depends(get
         {"request": request, "google_maps_api_key": google_maps_api_key, "user": current_user}
     )
 
-@app.get("/map/sapper", response_class=HTMLResponse)
+@app.get("/sapper_map", response_class=HTMLResponse)
 async def sapper_map(request: Request, current_user: UserResponse = Depends(get_current_user)):
     if current_user.role != "sapper":
         raise HTTPException(status_code=403, detail="Unauthorized access")
@@ -379,6 +395,29 @@ async def admin_map(request: Request, current_user: UserResponse = Depends(get_c
         "admin_map.html", 
         {"request": request, "google_maps_api_key": google_maps_api_key, "user": current_user}
     )
+
+# API endpoint для получения списка пользователей (только для админов и модераторов)
+@app.get("/api/users", response_model=List[UserResponse])
+async def get_users(current_user: UserResponse = Depends(get_current_user)):
+    # Проверка прав доступа
+    if current_user.role not in ["admin", "moderator"]:
+        raise HTTPException(status_code=403, detail="Unauthorized access")
+    
+    async with get_connection() as conn:
+        cursor = await conn.execute(
+            "SELECT id, username, email, full_name, role FROM users"
+        )
+        users = await cursor.fetchall()
+    
+    return [
+        UserResponse(
+            id=user["id"],
+            username=user["username"],
+            email=user["email"],
+            full_name=user["full_name"],
+            role=user["role"]
+        ) for user in users
+    ]
 
 # Run the application
 if __name__ == "__main__":

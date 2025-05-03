@@ -198,10 +198,7 @@
                     <div class="col-md-8">
                         <div class="card">
                             <div class="card-header d-flex justify-content-between align-items-center">
-                                <div>Карта об'єктів</div>
-                                <a href="/map/admin" class="btn btn-sm btn-primary">
-                                    Відкрити повну карту
-                                </a>
+                                <div>Карта розташування об'єктів</div>
                             </div>
                             <div class="card-body">
                                 <div id="map"></div>
@@ -226,9 +223,9 @@
             <div class="tab-pane fade" id="explosive-objects">
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <div>Список вибухонебезпечних об'єктів</div>
+                        <div>Останні вибухонебезпечні об'єкти</div>
                         <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addObjectModal">
-                            Додати новий об'єкт
+                            Додати об'єкт
                         </button>
                     </div>
                     <div class="card-body">
@@ -238,14 +235,15 @@
                                     <tr>
                                         <th>ID</th>
                                         <th>Назва</th>
-                                        <th>Регіон</th>
                                         <th>Статус</th>
                                         <th>Пріоритет</th>
-                                        <th>Створено</th>
+                                        <th>Регіон</th>
+                                        <th>Додано</th>
+                                        <th>Ким додано</th>
                                         <th>Дії</th>
                                     </tr>
                                 </thead>
-                                <tbody id="objectsTable">
+                                <tbody id="explosiveObjectsTable">
                                     <!-- Will be populated dynamically -->
                                 </tbody>
                             </table>
@@ -456,7 +454,21 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap" async defer></script>
     <script src="/static/js/admin_panel.js"></script>
+    <script>
+        // Загружаем Google Maps API напрямую, без дополнительных проверок
+        // В режиме разработки будет водяной знак, но карта будет работать
+        const apiKey = "{{ google_maps_api_key }}";
+        const apiUrl = apiKey && apiKey !== "YOUR_GOOGLE_MAPS_API_KEY_HERE" && apiKey !== ""
+            ? `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap` 
+            : "https://maps.googleapis.com/maps/api/js?callback=initMap";
+        
+        // Создаем скрипт динамически
+        const script = document.createElement('script');
+        script.src = apiUrl;
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+    </script>
 </body>
 </html> 
