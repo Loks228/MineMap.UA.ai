@@ -100,26 +100,74 @@ async function loadExplosiveObjects() {
 
 // Add marker to map
 function addMarker(obj) {
-  // Determine marker color based on status
-  const markerColor = getMarkerColor(obj.status)
-
-  // Create marker
-  const marker = new google.maps.Marker({
-    position: { lat: obj.latitude, lng: obj.longitude },
-    map: map,
-    title: obj.title,
-    icon: {
+  // Determine marker icon based on status
+  let markerIcon;
+  
+  if (obj.status === 'mined') {
+    // Use custom red flag icon
+    markerIcon = {
+      url: "/static/images/flag_red.png",
+      scaledSize: new google.maps.Size(32, 32)
+    };
+  } else {
+    // Use colored circle for other statuses
+    const markerColor = getMarkerColor(obj.status);
+    markerIcon = {
       path: google.maps.SymbolPath.CIRCLE,
       fillColor: markerColor,
       fillOpacity: 0.9,
       strokeWeight: 1,
       strokeColor: "#ffffff",
       scale: 10,
-    },
-  })
+    };
+  }
+
+  let marker;
+  
+  // Check if AdvancedMarkerElement is available
+  if (google.maps.marker && google.maps.marker.AdvancedMarkerElement) {
+    // Create a div element for the marker content
+    const markerContent = document.createElement('div');
+    
+    if (obj.status === 'mined') {
+      // For dangerous objects, use the flag image
+      const img = document.createElement('img');
+      img.src = "/static/images/flag_red.png";
+      img.style.width = '32px';
+      img.style.height = '32px';
+      markerContent.appendChild(img);
+    } else {
+      // For other statuses, create a colored circle
+      markerContent.style.width = '20px';
+      markerContent.style.height = '20px';
+      markerContent.style.borderRadius = '50%';
+      markerContent.style.backgroundColor = getMarkerColor(obj.status);
+      markerContent.style.border = '2px solid white';
+    }
+    
+    // Create an AdvancedMarkerElement
+    marker = new google.maps.marker.AdvancedMarkerElement({
+      position: { lat: obj.latitude, lng: obj.longitude },
+      map: map,
+      title: obj.title,
+      content: markerContent
+    });
+  } else {
+    // Fallback to regular Marker for backward compatibility
+    marker = new google.maps.Marker({
+      position: { lat: obj.latitude, lng: obj.longitude },
+      map: map,
+      title: obj.title,
+      icon: markerIcon
+    });
+  }
 
   // Add click event listener for info window
-  marker.addListener("click", () => {
+  marker.addEventListener ? 
+    marker.addEventListener("click", showInfoWindow) : 
+    marker.addListener("click", showInfoWindow);
+    
+  function showInfoWindow() {
     const content = `
             <div style="padding: 10px;">
                 <h5 style="margin-top: 0;">${obj.title}</h5>
@@ -134,7 +182,7 @@ function addMarker(obj) {
 
     infoWindow.setContent(content)
     infoWindow.open(map, marker)
-  })
+  }
 
   // Add marker to array
   markers.push(marker)
@@ -143,7 +191,11 @@ function addMarker(obj) {
 // Clear all markers from map
 function clearMarkers() {
   markers.forEach((marker) => {
-    marker.setMap(null)
+    if (marker instanceof google.maps.Marker) {
+      marker.setMap(null);
+    } else if (marker instanceof google.maps.marker.AdvancedMarkerElement) {
+      marker.map = null;
+    }
   })
   markers = []
 }

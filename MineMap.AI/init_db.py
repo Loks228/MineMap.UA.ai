@@ -55,6 +55,7 @@ async def init_db():
             priority TEXT NOT NULL,
             region_id INTEGER REFERENCES regions(id),
             reported_by INTEGER REFERENCES users(id),
+            photo_url TEXT,
             reported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );

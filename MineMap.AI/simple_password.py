@@ -1,11 +1,19 @@
 import sqlite3
-from passlib.context import CryptContext
 
 # Настройка для хэширования паролей
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-def get_password_hash(password):
-    return pwd_context.hash(password)
+try:
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    
+    def get_password_hash(password):
+        return pwd_context.hash(password)
+except Exception as e:
+    # Обходное решение проблемы с bcrypt 4.x и passlib
+    import bcrypt
+    
+    def get_password_hash(password):
+        salt = bcrypt.gensalt()
+        return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
 # Подключение к базе данных
 conn = sqlite3.connect('minemap.db')

@@ -19,6 +19,9 @@ class UserLogin(BaseModel):
 class UserResponse(UserBase):
     id: int
     role: str
+    avatar_url: Optional[str] = None
+    phone: Optional[str] = None
+    created_at: Optional[datetime] = None
 
 # Region models
 class RegionBase(BaseModel):
@@ -52,5 +55,6 @@ class ExplosiveObjectResponse(ExplosiveObjectBase):
     region_name: str
     reported_by: int
     reported_by_username: str
+    photo_url: Optional[str] = None
     reported_at: datetime
     updated_at: datetime

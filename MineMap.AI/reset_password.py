@@ -1,32 +1,40 @@
 import sqlite3
-from passlib.context import CryptContext
 
 # Настройка для хэширования паролей
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-def get_password_hash(password):
-    return pwd_context.hash(password)
+try:
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    
+    def get_password_hash(password):
+        return pwd_context.hash(password)
+except Exception as e:
+    # Обходное решение проблемы с bcrypt 4.x и passlib
+    import bcrypt
+    
+    def get_password_hash(password):
+        salt = bcrypt.gensalt()
+        return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
 # Подключение к базе данных
 conn = sqlite3.connect('minemap.db')
 cursor = conn.cursor()
 
-# Новый пароль (замените на желаемый)
+# Новый очень простой пароль
 new_password = "admin123"
 hashed_password = get_password_hash(new_password)
 
-# Обновление пароля для пользователя LordLoks
+# Обновление пароля для пользователя admin
 cursor.execute("""
 UPDATE users 
 SET password = ?
-WHERE username = 'LordLoks'
+WHERE username = 'admin'
 """, (hashed_password,))
 
 # Сохранение изменений
 conn.commit()
 
 # Проверка результата
-cursor.execute("SELECT id, username FROM users WHERE username = 'LordLoks'")
+cursor.execute("SELECT id, username FROM users WHERE username = 'admin'")
 user = cursor.fetchone()
 if user:
     print(f"Пароль для пользователя {user[1]} (ID: {user[0]}) успешно обновлен.")

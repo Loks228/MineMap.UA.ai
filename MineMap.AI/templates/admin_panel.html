@@ -109,6 +109,68 @@
             width: 100%;
             border-radius: 10px;
         }
+        
+        /* Стили для профиля */
+        .profile-section {
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .activity-item {
+            border-left: 3px solid #007bff;
+            padding-left: 15px;
+            margin-bottom: 15px;
+            position: relative;
+        }
+        .activity-item::before {
+            content: '';
+            width: 12px;
+            height: 12px;
+            background-color: #007bff;
+            border-radius: 50%;
+            position: absolute;
+            left: -7px;
+            top: 0;
+        }
+        .login-history-item {
+            border-bottom: 1px solid #e9ecef;
+            padding: 10px 0;
+        }
+        .login-history-item:last-child {
+            border-bottom: none;
+        }
+        .verified-badge {
+            color: #28a745;
+            font-size: 16px;
+        }
+        .api-key {
+            font-family: monospace;
+            background-color: #f8f9fa;
+            padding: 8px;
+            border-radius: 4px;
+            word-break: break-all;
+        }
+        /* Стили для индикатора загрузки аватара */
+        .profile-avatar.uploading {
+            opacity: 0.5;
+            filter: blur(2px);
+            transition: all 0.3s ease;
+        }
+        /* Анимация для аватара при обновлении */
+        @keyframes avatarPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .profile-avatar {
+            transition: transform 0.3s ease;
+        }
+        .profile-avatar:not(.uploading):hover {
+            animation: avatarPulse 1s ease infinite;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -139,8 +201,8 @@
                 </a>
             </li>
             <li>
-                <a href="#settings" data-bs-toggle="tab">
-                    <i class="bi bi-gear-fill"></i> Налаштування
+                <a href="#profile" data-bs-toggle="tab">
+                    <i class="bi bi-person-circle"></i> Профіль
                 </a>
             </li>
             <li>
@@ -311,6 +373,281 @@
                 </div>
             </div>
 
+            <div class="tab-pane fade" id="profile">
+                <div class="card">
+                    <div class="card-header">Інформація профілю</div>
+                    <div class="card-body">
+                        <div class="row align-items-center mb-4">
+                            <div class="col-md-2 text-center">
+                                <img id="profileAvatar" src="{{ user.avatar_url or '/static/images/default-avatar.png' }}" alt="Аватар користувача" class="img-fluid rounded-circle mb-3" style="max-width: 150px; max-height: 150px; cursor: pointer;" data-bs-toggle="modal" data-bs-target="#uploadAvatarModal">
+                            </div>
+                            <div class="col-md-10">
+                                <h3 id="profileFullNameHeader">{{ user.full_name or user.username }}</h3>
+                                <p class="text-muted">
+                                    <span class="badge bg-{{ 'primary' if user.role == 'admin' else 'success' if user.role == 'moderator' else 'info' if user.role == 'sapper' else 'secondary' }}">
+                                        <span id="profileRoleHeader">{{ user.role|capitalize }}</span>
+                                    </span>
+                                    <span class="ms-2" id="profileEmailHeader">{{ user.email }}</span>
+                                </p>
+                                <p>Акаунт створено: <span class="fw-bold" id="profileCreatedAtHeader">
+                                    {% if user.created_at %}
+                                        {% if user.created_at is string %}
+                                            {{ user.created_at }}
+                                        {% else %}
+                                            {{ user.created_at.strftime('%d.%m.%Y %H:%M') }}
+                                        {% endif %}
+                                    {% else %}
+                                        Дата не вказана
+                                    {% endif %}
+                                </span></p>
+                            </div>
+                        </div>
+
+                        <!-- Профиль Tabs -->
+                        <ul class="nav nav-tabs mb-4" id="profileInnerTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="personal-tab" data-bs-toggle="tab" data-bs-target="#personal" type="button" role="tab">
+                                    <i class="bi bi-person"></i> Особисті дані
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="security-tab" data-bs-toggle="tab" data-bs-target="#security" type="button" role="tab">
+                                    <i class="bi bi-shield-lock"></i> Безпека
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="activity-tab" data-bs-toggle="tab" data-bs-target="#activity" type="button" role="tab">
+                                    <i class="bi bi-clock-history"></i> Історія
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="notifications-tab" data-bs-toggle="tab" data-bs-target="#notifications" type="button" role="tab">
+                                    <i class="bi bi-bell"></i> Сповіщення
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="api-tab" data-bs-toggle="tab" data-bs-target="#api" type="button" role="tab">
+                                    <i class="bi bi-code-slash"></i> API
+                                </button>
+                            </li>
+                        </ul>
+
+                        <!-- Tab Content -->
+                        <div class="tab-content" id="profileTabsContent">
+                            <!-- Personal Data Tab -->
+                            <div class="tab-pane fade show active" id="personal" role="tabpanel" aria-labelledby="personal-tab">
+                                <div class="profile-section">
+                                    <h4>Редагування особистих даних</h4>
+                                    <form id="personalDataForm">
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <label for="fullName" class="form-label">Повне ім'я</label>
+                                                <input type="text" class="form-control" id="fullName" value="{{ user.full_name }}">
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label for="username" class="form-label">Ім'я користувача</label>
+                                                <input type="text" class="form-control" id="username" value="{{ user.username }}" readonly>
+                                                <div class="form-text">Ім'я користувача не можна змінити</div>
+                                            </div>
+                                        </div>
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <label for="email" class="form-label">Email</label>
+                                                <div class="input-group">
+                                                    <input type="email" class="form-control" id="email" value="{{ user.email }}">
+                                                    <button class="btn btn-outline-primary" type="button" id="verifyEmailBtn">Перевірити</button>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label for="phone" class="form-label">Телефон</label>
+                                                <div class="input-group">
+                                                    <input type="tel" class="form-control" id="phone" value="{{ user.phone }}">
+                                                    <button class="btn btn-outline-primary" type="button" id="verifyPhoneBtn">Перевірити</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="d-flex justify-content-end">
+                                            <button type="submit" class="btn btn-primary">Зберегти зміни</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <!-- Security Tab -->
+                            <div class="tab-pane fade" id="security" role="tabpanel" aria-labelledby="security-tab">
+                                <div class="profile-section mb-4">
+                                    <h4>Зміна пароля</h4>
+                                    <form id="changePasswordForm">
+                                        <div class="mb-3">
+                                            <label for="currentPassword" class="form-label">Поточний пароль</label>
+                                            <input type="password" class="form-control" id="currentPassword" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="newPassword" class="form-label">Новий пароль</label>
+                                            <input type="password" class="form-control" id="newPassword" required>
+                                            <div class="progress mt-2" style="height: 5px;">
+                                                <div class="progress-bar" id="passwordStrength" role="progressbar" style="width: 0%"></div>
+                                            </div>
+                                            <div class="form-text" id="passwordFeedback">Використовуйте комбінацію літер, цифр і спеціальних символів</div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="confirmPassword" class="form-label">Підтвердження пароля</label>
+                                            <input type="password" class="form-control" id="confirmPassword" required>
+                                            <div class="form-text" id="confirmFeedback"></div>
+                                        </div>
+                                        <div class="d-flex justify-content-end">
+                                            <button type="submit" class="btn btn-primary">Змінити пароль</button>
+                                        </div>
+                                    </form>
+                                </div>
+
+                                <div class="profile-section">
+                                    <h4>Двофакторна аутентифікація (2FA)</h4>
+                                    <div class="mb-4">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="enable2FA">
+                                            <label class="form-check-label" for="enable2FA">Увімкнути двофакторну аутентифікацію</label>
+                                        </div>
+                                        <div class="form-text">Підвищить безпеку вашого акаунта</div>
+                                    </div>
+
+                                    <div id="twoFactorSetup" style="display: none;">
+                                        <div class="alert alert-info">
+                                            <h5>Налаштування двофакторної аутентифікації</h5>
+                                            <ol>
+                                                <li>Встановіть Google Authenticator на свій телефон</li>
+                                                <li>Відскануйте QR-код або введіть секретний ключ вручну</li>
+                                                <li>Введіть 6-значний код із програми для підтвердження</li>
+                                            </ol>
+                                        </div>
+
+                                        <div class="row">
+                                            <div class="col-md-6 text-center">
+                                                <div id="qrCode" class="mb-3 p-3 bg-light d-inline-block">
+                                                    <img src="" id="qrCodeImage" alt="QR код" style="display: none;">
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="secretKey" class="form-label">Секретний ключ</label>
+                                                    <input type="text" class="form-control text-center" id="secretKey" readonly>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="verificationCode" class="form-label">Код підтвердження</label>
+                                                    <input type="text" class="form-control" id="verificationCode" placeholder="Введіть 6-значний код">
+                                                </div>
+                                                <div class="d-grid">
+                                                    <button type="button" class="btn btn-success" id="verifyTwoFactorBtn">Підтвердити і активувати</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div id="twoFactorActive" style="display: none;">
+                                        <div class="alert alert-success">
+                                            <i class="bi bi-shield-check"></i> Двофакторна аутентифікація активна
+                                        </div>
+                                        <p>Ви можете деактивувати двофакторну аутентифікацію, але це знизить безпеку вашого акаунта.</p>
+                                        <button type="button" class="btn btn-outline-danger" id="disable2FABtn">Деактивувати 2FA</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Activity Tab -->
+                            <div class="tab-pane fade" id="activity" role="tabpanel" aria-labelledby="activity-tab">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="profile-section">
+                                            <h4>Історія входів</h4>
+                                            <div id="loginHistory">
+                                                <div class="login-history-item">
+                                                    <p><strong><i class="bi bi-calendar-check"></i> {{ user.last_login }}</strong></p>
+                                                    <p><i class="bi bi-geo-alt"></i> Kyiv, Ukraine ({{ user.last_ip }})</p>
+                                                    <p><i class="bi bi-laptop"></i> Chrome on Windows</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="profile-section">
+                                            <h4>Дії в системі</h4>
+                                            <div id="activityHistory">
+                                                <!-- Історія активності буде заповнюватися за допомогою JavaScript -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Notifications Tab -->
+                            <div class="tab-pane fade" id="notifications" role="tabpanel" aria-labelledby="notifications-tab">
+                                <div class="profile-section">
+                                    <h4>Налаштування сповіщень</h4>
+                                    <form id="notificationsForm">
+                                        <div class="mb-4">
+                                            <h5>Email сповіщення</h5>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="emailNewObjects" checked>
+                                                <label class="form-check-label" for="emailNewObjects">Нові об'єкти в системі</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="emailStatusChanges" checked>
+                                                <label class="form-check-label" for="emailStatusChanges">Зміни статусу об'єктів</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="emailSecurityAlerts" checked>
+                                                <label class="form-check-label" for="emailSecurityAlerts">Сповіщення безпеки</label>
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-4">
+                                            <h5>Push-сповіщення</h5>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="pushNewObjects">
+                                                <label class="form-check-label" for="pushNewObjects">Нові об'єкти в системі</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="pushStatusChanges">
+                                                <label class="form-check-label" for="pushStatusChanges">Зміни статусу об'єктів</label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="pushSecurityAlerts">
+                                                <label class="form-check-label" for="pushSecurityAlerts">Сповіщення безпеки</label>
+                                            </div>
+                                        </div>
+
+                                        <div class="d-flex justify-content-end">
+                                            <button type="submit" class="btn btn-primary">Зберегти налаштування</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <!-- API Tab -->
+                            <div class="tab-pane fade" id="api" role="tabpanel" aria-labelledby="api-tab">
+                                <div class="profile-section">
+                                    <div class="d-flex justify-content-between align-items-center mb-4">
+                                        <h4>API Ключі</h4>
+                                        <button type="button" class="btn btn-primary" id="generateApiKeyBtn">
+                                            <i class="bi bi-plus-circle"></i> Створити новий ключ
+                                        </button>
+                                    </div>
+
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle"></i> API ключі надають доступ до даних системи через API. 
+                                        Зберігайте їх в безпечному місці та не передавайте третім особам.
+                                    </div>
+
+                                    <div id="apiKeys">
+                                        <!-- API ключі будуть відображатися тут -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="tab-pane fade" id="settings">
                 <div class="card">
                     <div class="card-header">Налаштування системи</div>
@@ -455,20 +792,173 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/admin_panel.js"></script>
-    <script>
-        // Загружаем Google Maps API напрямую, без дополнительных проверок
-        // В режиме разработки будет водяной знак, но карта будет работать
-        const apiKey = "{{ google_maps_api_key }}";
-        const apiUrl = apiKey && apiKey !== "YOUR_GOOGLE_MAPS_API_KEY_HERE" && apiKey !== ""
-            ? `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap` 
-            : "https://maps.googleapis.com/maps/api/js?callback=initMap";
-        
-        // Создаем скрипт динамически
-        const script = document.createElement('script');
-        script.src = apiUrl;
-        script.async = true;
-        script.defer = true;
-        document.head.appendChild(script);
-    </script>
+    <script src="/static/js/profile.js"></script>
+    
+    <!-- Модальные окна для профиля -->
+    <!-- Модальное окно для загрузки аватара -->
+    <div class="modal fade" id="uploadAvatarModal" tabindex="-1" aria-labelledby="uploadAvatarModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="uploadAvatarModalLabel">Завантажити аватар</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="avatarUploadForm" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="avatarFile" class="form-label">Виберіть зображення</label>
+                            <input type="file" class="form-control" id="avatarFile" accept="image/*" required>
+                            <div class="form-text">Рекомендовані розміри: 300x300 пікселів, максимальний розмір: 2MB</div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="button" class="btn btn-primary" id="saveAvatar">Завантажити</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для редактирования профиля -->
+    <div class="modal fade" id="editProfileModal" tabindex="-1" aria-labelledby="editProfileModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editProfileModalLabel">Редагувати профіль</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editProfileForm">
+                        <div class="mb-3">
+                            <label for="editUsername" class="form-label">Ім'я користувача</label>
+                            <input type="text" class="form-control" id="editUsername" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editEmail" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="editEmail" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editFullName" class="form-label">Повне ім'я</label>
+                            <input type="text" class="form-control" id="editFullName" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="button" class="btn btn-primary" id="saveProfile">Зберегти</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для смены пароля -->
+    <div class="modal fade" id="changePasswordModal" tabindex="-1" aria-labelledby="changePasswordModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="changePasswordModalLabel">Змінити пароль</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="changePasswordForm">
+                        <div class="mb-3">
+                            <label for="currentPassword" class="form-label">Поточний пароль</label>
+                            <input type="password" class="form-control" id="currentPassword" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="newPassword" class="form-label">Новий пароль</label>
+                            <input type="password" class="form-control" id="newPassword" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="confirmPassword" class="form-label">Підтвердіть новий пароль</label>
+                            <input type="password" class="form-control" id="confirmPassword" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="button" class="btn btn-primary" id="savePassword">Зберегти</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generate API Key Modal -->
+    <div class="modal fade" id="generateApiKeyModal" tabindex="-1" aria-labelledby="generateApiKeyModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="generateApiKeyModalLabel">Створення нового API ключа</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="apiKeyName" class="form-label">Назва ключа</label>
+                        <input type="text" class="form-control" id="apiKeyName" placeholder="Наприклад: Мобільний додаток">
+                    </div>
+                    <div class="mb-3">
+                        <label for="apiKeyExpiration" class="form-label">Термін дії</label>
+                        <select class="form-select" id="apiKeyExpiration">
+                            <option value="30">30 днів</option>
+                            <option value="90">90 днів</option>
+                            <option value="180">180 днів</option>
+                            <option value="365">1 рік</option>
+                            <option value="0">Необмежений</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Дозволи</label>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="permissionRead" checked>
+                            <label class="form-check-label" for="permissionRead">Читання даних</label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="permissionWrite">
+                            <label class="form-check-label" for="permissionWrite">Запис даних</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="permissionDelete">
+                            <label class="form-check-label" for="permissionDelete">Видалення даних</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="button" class="btn btn-primary" id="confirmGenerateApiKey">Створити ключ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // Загружаем Google Maps API
+    const apiKey = "{{ google_maps_api_key }}";
+    const apiUrl = apiKey && apiKey !== "YOUR_GOOGLE_MAPS_API_KEY_HERE" && apiKey !== ""
+        ? `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&callback=initMap`
+        : `https://maps.googleapis.com/maps/api/js?loading=async&callback=initMap`;
+
+    if (!apiKey || apiKey === "YOUR_GOOGLE_MAPS_API_KEY_HERE" || apiKey === "") {
+        console.warn("API-ключ Google Maps не указан. Карта может работать с ограничениями (водяной знак).");
+    }
+
+    // Создаем скрипт динамически
+    const script = document.createElement('script');
+    script.src = apiUrl;
+    script.async = true;
+    script.defer = true;
+    script.onerror = () => {
+        console.error("Ошибка загрузки Google Maps API. Проверьте подключение к интернету или API-ключ.");
+        const mapElement = document.getElementById("map");
+        if (mapElement) {
+            mapElement.innerHTML = `
+                <div class="alert alert-danger">
+                    Не удалось загрузить карту. Проверьте подключение к интернету или API-ключ.
+                </div>`;
+            mapElement.style.height = 'auto';
+        }
+    };
+    document.head.appendChild(script);
+</script>
 </body>
 </html> 

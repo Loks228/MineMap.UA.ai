@@ -4,7 +4,7 @@ let markers = [];
 let explosiveObjects = [];
 let users = [];
 let regions = [];
-let googleMapsLoaded = false;
+let googleMapsLoaded = true;
 
 // Инициализация карты Google Maps
 function initMap() {
@@ -182,28 +182,72 @@ function addMarkersToMap() {
             
             const position = { lat: obj.latitude, lng: obj.longitude };
             
-            // Определение цвета маркера в зависимости от статуса
-            let markerIcon = null;
+            // Создаем элемент для контента маркера
+            const markerContent = document.createElement('div');
             
-            if (obj.status === 'demined') {
-                markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png" };
-            } else if (obj.status === 'unconfirmed') {
-                markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png" };
-            } else if (obj.status === 'secret') {
-                markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/purple-dot.png" };
-            } else if (obj.status === 'mined') {
-                markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png" };
-            } else if (obj.status === 'archived') {
-                markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png" };
+            if (obj.status === 'mined') {
+                // Для флага используем img элемент
+                const img = document.createElement('img');
+                img.src = "/static/images/flag_red.png";
+                img.style.width = '32px';
+                img.style.height = '32px';
+                markerContent.appendChild(img);
+            } else {
+                // Для других статусов создаем цветной круг
+                markerContent.style.width = '20px';
+                markerContent.style.height = '20px';
+                markerContent.style.borderRadius = '50%';
+                markerContent.style.border = '2px solid white';
+                
+                // Определяем цвет по статусу
+                if (obj.status === 'demined') {
+                    markerContent.style.backgroundColor = '#4CAF50'; // зеленый
+                } else if (obj.status === 'unconfirmed') {
+                    markerContent.style.backgroundColor = '#FFC107'; // желтый
+                } else if (obj.status === 'secret') {
+                    markerContent.style.backgroundColor = '#9C27B0'; // фиолетовый
+                } else if (obj.status === 'archived') {
+                    markerContent.style.backgroundColor = '#607D8B'; // серый/синий
+                }
             }
             
-            // Создание маркера
-            const marker = new google.maps.Marker({
-                position: position,
-                map: map,
-                title: obj.title || `Об'єкт #${obj.id}`,
-                icon: markerIcon
-            });
+            let marker;
+            
+            // Проверяем доступность AdvancedMarkerElement (для обратной совместимости)
+            if (google.maps.marker && google.maps.marker.AdvancedMarkerElement) {
+                // Создаем AdvancedMarkerElement
+                marker = new google.maps.marker.AdvancedMarkerElement({
+                    position: position,
+                    map: map,
+                    title: obj.title || `Об'єкт #${obj.id}`,
+                    content: markerContent
+                });
+            } else {
+                // Запасной вариант с обычным маркером для обратной совместимости
+                console.warn('AdvancedMarkerElement не доступен, использование устаревшего Marker');
+                
+                // Определение цвета маркера в зависимости от статуса для старого API
+                let markerIcon = null;
+                
+                if (obj.status === 'demined') {
+                    markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png" };
+                } else if (obj.status === 'unconfirmed') {
+                    markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png" };
+                } else if (obj.status === 'secret') {
+                    markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/purple-dot.png" };
+                } else if (obj.status === 'mined') {
+                    markerIcon = { url: "/static/images/flag_red.png", scaledSize: new google.maps.Size(32, 32) };
+                } else if (obj.status === 'archived') {
+                    markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png" };
+                }
+                
+                marker = new google.maps.Marker({
+                    position: position,
+                    map: map,
+                    title: obj.title || `Об'єкт #${obj.id}`,
+                    icon: markerIcon
+                });
+            }
             
             // Информационное окно
             const infoWindow = new google.maps.InfoWindow({
@@ -220,9 +264,16 @@ function addMarkersToMap() {
             });
             
             // Открытие информационного окна при клике на маркер
-            marker.addListener('click', () => {
-                infoWindow.open(map, marker);
-            });
+            // Используем правильный способ добавления обработчика в зависимости от типа маркера
+            if (marker.addEventListener) {
+                marker.addEventListener('click', () => {
+                    infoWindow.open(map, marker);
+                });
+            } else {
+                marker.addListener('click', () => {
+                    infoWindow.open(map, marker);
+                });
+            }
             
             markers.push(marker);
         } catch (error) {
@@ -238,8 +289,14 @@ function clearMarkers() {
         
         markers.forEach(marker => {
             try {
-                if (marker && typeof marker.setMap === 'function') {
+                if (marker instanceof google.maps.Marker) {
                     marker.setMap(null);
+                } else if (marker instanceof google.maps.marker.AdvancedMarkerElement) {
+                    marker.map = null;
+                } else if (marker && typeof marker.setMap === 'function') {
+                    marker.setMap(null);
+                } else if (marker && 'map' in marker) {
+                    marker.map = null;
                 }
             } catch (e) {
                 console.warn('Ошибка при удалении маркера:', e);
@@ -535,6 +592,15 @@ function showAlert(type, message) {
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', () => {
     try {
+        // Отключаем автоматическую инициализацию табов Bootstrap, заменяя их на наш обработчик
+        // Удаляем атрибут data-bs-toggle="tab" чтобы Bootstrap не инициализировал свои обработчики
+        document.querySelectorAll('.sidebar-menu a[data-bs-toggle="tab"]').forEach(tab => {
+            // Сохраняем href перед удалением атрибута
+            const href = tab.getAttribute('href');
+            tab.setAttribute('data-target', href);
+            tab.removeAttribute('data-bs-toggle');
+        });
+
         // Обновление UI даже если API карт не загрузились
         const mapElement = document.getElementById("map");
         if (mapElement && (!googleMapsLoaded && (typeof google === 'undefined' || !google.maps))) {
@@ -544,7 +610,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Загрузка данных
         loadExplosiveObjects();
-        loadUsers();
         loadRegions();
         
         // Обработчики для форм - используем опциональную цепочку
@@ -554,21 +619,182 @@ document.addEventListener('DOMContentLoaded', () => {
         const saveUserBtn = document.getElementById('saveUser');
         if (saveUserBtn) saveUserBtn.addEventListener('click', saveUser);
         
-        // Обработчики для вкладок
-        document.querySelectorAll('.sidebar-menu a[data-bs-toggle="tab"]').forEach(tab => {
+        // Инициализация всех табов Bootstrap
+        const tabElems = document.querySelectorAll('[data-bs-toggle="tab"]');
+        tabElems.forEach(el => new bootstrap.Tab(el));
+        
+        // Обработчики для вкладок меню
+        document.querySelectorAll('.sidebar-menu a[data-target]').forEach(tab => {
             tab.addEventListener('click', function (e) {
+                // Предотвращаем обработку по умолчанию и остановку распространения события
                 e.preventDefault();
-                const tabTarget = this.getAttribute('href');
-                const tabTrigger = new bootstrap.Tab(this);
-                tabTrigger.show();
+                e.stopPropagation();
                 
-                // Обновление активного класса
+                const tabTarget = this.getAttribute('data-target');
+                
+                // Используем ручное переключение таба вместо Bootstrap API
+                // 1. Скрываем все вкладки
+                document.querySelectorAll('.tab-pane').forEach(pane => {
+                    pane.classList.remove('show', 'active');
+                });
+                
+                // 2. Отображаем целевую вкладку
+                const targetPane = document.querySelector(tabTarget);
+                if (targetPane) {
+                    targetPane.classList.add('show', 'active');
+                }
+                
+                // 3. Обновление активного класса в меню
                 document.querySelectorAll('.sidebar-menu a').forEach(link => {
                     link.classList.remove('active');
                 });
                 this.classList.add('active');
+                
+                // Обновляем URL хэш без перезагрузки страницы
+                history.pushState(null, null, tabTarget);
+                
+                // Загружаем данные при переключении на вкладку
+                if (tabTarget === '#users') {
+                    console.log('Загрузка списка пользователей...');
+                    loadUsers();
+                } else if (tabTarget === '#explosive-objects') {
+                    console.log('Загрузка списка объектов...');
+                    loadExplosiveObjects();
+                } else if (tabTarget === '#regions') {
+                    console.log('Загрузка списка регионов...');
+                    loadRegions();
+                } else if (tabTarget === '#profile') {
+                    console.log('Загрузка профиля...');
+                    loadUserData(); // Эта функция определена в profile.js
+                }
             });
         });
+        
+        // Проверка и активация начальной вкладки по хэшу в URL
+        function activateTabFromHash() {
+            const hash = window.location.hash;
+            if (hash) {
+                const tabLink = document.querySelector(`.sidebar-menu a[data-target="${hash}"]`);
+                if (tabLink) {
+                    // Активируем вкладку
+                    document.querySelectorAll('.tab-pane').forEach(pane => {
+                        pane.classList.remove('show', 'active');
+                    });
+                    
+                    const targetPane = document.querySelector(hash);
+                    if (targetPane) {
+                        targetPane.classList.add('show', 'active');
+                    }
+                    
+                    // Обновляем активный класс в меню
+                    document.querySelectorAll('.sidebar-menu a').forEach(link => {
+                        link.classList.remove('active');
+                    });
+                    tabLink.classList.add('active');
+                    
+                    // Загружаем данные для соответствующей вкладки
+                    if (hash === '#users') {
+                        loadUsers();
+                    } else if (hash === '#explosive-objects') {
+                        loadExplosiveObjects();
+                    } else if (hash === '#regions') {
+                        loadRegions();
+                    } else if (hash === '#profile') {
+                        loadUserData(); // Эта функция определена в profile.js
+                    }
+                }
+            } else {
+                // Активируем первую вкладку если нет хэша
+                const firstTab = document.querySelector('.sidebar-menu a[data-target]');
+                if (firstTab) {
+                    const firstTabTarget = firstTab.getAttribute('data-target');
+                    
+                    document.querySelectorAll('.tab-pane').forEach(pane => {
+                        pane.classList.remove('show', 'active');
+                    });
+                    
+                    const targetPane = document.querySelector(firstTabTarget);
+                    if (targetPane) {
+                        targetPane.classList.add('show', 'active');
+                    }
+                    
+                    document.querySelectorAll('.sidebar-menu a').forEach(link => {
+                        link.classList.remove('active');
+                    });
+                    firstTab.classList.add('active');
+                    
+                    // Загружаем начальные данные
+                    if (firstTabTarget === '#users') {
+                        loadUsers();
+                    }
+                }
+            }
+        }
+        
+        // Вызываем функцию для активации начальной вкладки
+        activateTabFromHash();
+        
+        // Добавляем обработчик изменения хэша в URL
+        window.addEventListener('hashchange', activateTabFromHash);
+        
+        // Добавляем обработчики для кнопок в модальных окнах профиля
+        const saveAvatarBtn = document.getElementById('saveAvatar');
+        if (saveAvatarBtn) saveAvatarBtn.addEventListener('click', saveAvatar);
+        
+        const saveProfileBtn = document.getElementById('saveProfile');
+        if (saveProfileBtn) saveProfileBtn.addEventListener('click', saveProfileChanges);
+        
+        const savePasswordBtn = document.getElementById('savePassword');
+        if (savePasswordBtn) savePasswordBtn.addEventListener('click', changePassword);
+        
+        // Событие открытия модального окна редактирования профиля
+        const editProfileModal = document.getElementById('editProfileModal');
+        if (editProfileModal) {
+            editProfileModal.addEventListener('show.bs.modal', function () {
+                // Заполняем поля формы текущими данными профиля
+                const username = document.getElementById('profileUsername').textContent;
+                const email = document.getElementById('profileEmail').textContent;
+                const fullName = document.getElementById('profileFullName').textContent;
+                
+                document.getElementById('editUsername').value = username;
+                document.getElementById('editEmail').value = email;
+                document.getElementById('editFullName').value = fullName;
+            });
+        }
+        
+        // Обрабатываем внутренние вкладки профиля, чтобы предотвратить конфликты с Bootstrap Tabs
+        document.querySelectorAll('#profileInnerTabs button[data-bs-toggle="tab"]').forEach(button => {
+            // Удаляем атрибут data-bs-toggle, чтобы Bootstrap не обрабатывал эти вкладки автоматически
+            button.removeAttribute('data-bs-toggle');
+            // Получаем target для вкладки
+            const target = button.getAttribute('data-bs-target');
+            button.setAttribute('data-profile-target', target);
+            
+            // Добавляем обработчик события
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Получаем целевую вкладку
+                const targetPane = document.querySelector(this.getAttribute('data-profile-target'));
+                
+                // Убираем активное состояние со всех вкладок
+                document.querySelectorAll('#profileInnerTabs button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                document.querySelectorAll('#profileTabsContent .tab-pane').forEach(pane => {
+                    pane.classList.remove('show', 'active');
+                });
+                
+                // Активируем выбранную вкладку
+                this.classList.add('active');
+                if (targetPane) {
+                    targetPane.classList.add('show', 'active');
+                }
+            });
+        });
+        
+        // Остальные инициализации...
     } catch (error) {
         console.error('Ошибка при инициализации страницы:', error);
     }
@@ -770,5 +996,202 @@ function updateRecentReports() {
         });
     } catch (error) {
         console.error('Ошибка при обновлении последних сообщений:', error);
+    }
+}
+
+// Функция для загрузки данных профиля пользователя
+async function loadProfile() {
+    try {
+        const response = await fetch('/api/user/profile', {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            },
+            cache: 'no-store'
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Не вдалося завантажити дані профілю (${response.status}): ${errorText}`);
+        }
+        
+        const userData = await response.json();
+        updateProfileUI(userData);
+        
+    } catch (error) {
+        console.error('Помилка завантаження даних профілю:', error);
+        showAlert('danger', `Помилка завантаження даних профілю: ${error.message}`);
+    }
+}
+
+// Функция для обновления UI профиля пользователя
+function updateProfileUI(userData) {
+    // Если есть элементы профиля на странице, обновляем их
+    const usernameTxt = document.getElementById('profileUsername');
+    const emailTxt = document.getElementById('profileEmail');
+    const fullNameTxt = document.getElementById('profileFullName');
+    const roleTxt = document.getElementById('profileRole');
+    const avatarImg = document.getElementById('profileAvatar');
+    const createdAtTxt = document.getElementById('profileCreatedAt');
+    
+    if (usernameTxt) usernameTxt.textContent = userData.username || '';
+    if (emailTxt) emailTxt.textContent = userData.email || '';
+    if (fullNameTxt) fullNameTxt.textContent = userData.full_name || '';
+    if (roleTxt) roleTxt.textContent = getUserRoleText(userData.role) || '';
+    
+    if (avatarImg && userData.avatar_url) {
+        avatarImg.src = userData.avatar_url;
+    } else if (avatarImg) {
+        avatarImg.src = '/static/images/default_avatar.png';
+    }
+    
+    if (createdAtTxt) createdAtTxt.textContent = formatDate(userData.created_at) || 'Не вказано';
+}
+
+// Функция для сохранения аватара
+async function saveAvatar() {
+    try {
+        const fileInput = document.getElementById('avatarFile');
+        
+        if (!fileInput.files || fileInput.files.length === 0) {
+            showAlert('warning', 'Будь ласка, виберіть файл для завантаження');
+            return;
+        }
+        
+        const file = fileInput.files[0];
+        if (file.size > 2 * 1024 * 1024) {
+            showAlert('warning', 'Розмір файлу не повинен перевищувати 2MB');
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('avatar', file);
+        
+        const response = await fetch('/api/user/avatar', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Помилка завантаження аватара (${response.status}): ${errorText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Закрытие модального окна
+        const modal = bootstrap.Modal.getInstance(document.getElementById('uploadAvatarModal'));
+        modal.hide();
+        
+        // Обновление изображения аватара
+        const avatarImg = document.getElementById('profileAvatar');
+        if (avatarImg && data.avatar_url) {
+            avatarImg.src = data.avatar_url + '?t=' + new Date().getTime(); // Добавляем timestamp для обхода кэширования
+        }
+        
+        showAlert('success', 'Аватар успішно завантажено');
+    } catch (error) {
+        console.error('Помилка при завантаженні аватара:', error);
+        showAlert('danger', `Помилка при завантаженні аватара: ${error.message}`);
+    }
+}
+
+// Функция для сохранения изменений профиля
+async function saveProfileChanges() {
+    try {
+        const username = document.getElementById('editUsername').value;
+        const email = document.getElementById('editEmail').value;
+        const fullName = document.getElementById('editFullName').value;
+        
+        // Валидация формы
+        if (!username || !email || !fullName) {
+            showAlert('warning', 'Будь ласка, заповніть всі обов\'язкові поля');
+            return;
+        }
+        
+        const userData = {
+            username,
+            email,
+            full_name: fullName
+        };
+        
+        const response = await fetch('/api/user/profile', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(userData)
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Помилка при зміні профілю (${response.status}): ${errorText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Закрытие модального окна
+        const modal = bootstrap.Modal.getInstance(document.getElementById('editProfileModal'));
+        modal.hide();
+        
+        // Обновление данных профиля на странице
+        updateProfileUI(data);
+        
+        showAlert('success', 'Профіль успішно оновлено');
+    } catch (error) {
+        console.error('Помилка при оновленні профілю:', error);
+        showAlert('danger', `Помилка при оновленні профілю: ${error.message}`);
+    }
+}
+
+// Функция для смены пароля
+async function changePassword() {
+    try {
+        const currentPassword = document.getElementById('currentPassword').value;
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        
+        // Валидация формы
+        if (!currentPassword || !newPassword || !confirmPassword) {
+            showAlert('warning', 'Будь ласка, заповніть всі поля');
+            return;
+        }
+        
+        if (newPassword !== confirmPassword) {
+            showAlert('warning', 'Новий пароль та підтвердження не співпадають');
+            return;
+        }
+        
+        const passwordData = {
+            current_password: currentPassword,
+            new_password: newPassword
+        };
+        
+        const response = await fetch('/api/user/password', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(passwordData)
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Помилка при зміні пароля (${response.status}): ${errorText}`);
+        }
+        
+        // Закрытие модального окна
+        const modal = bootstrap.Modal.getInstance(document.getElementById('changePasswordModal'));
+        modal.hide();
+        
+        // Очистка полей формы
+        document.getElementById('currentPassword').value = '';
+        document.getElementById('newPassword').value = '';
+        document.getElementById('confirmPassword').value = '';
+        
+        showAlert('success', 'Пароль успішно змінено');
+    } catch (error) {
+        console.error('Помилка при зміні пароля:', error);
+        showAlert('danger', `Помилка при зміні пароля: ${error.message}`);
     }
 } 
