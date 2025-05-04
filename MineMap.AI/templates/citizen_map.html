@@ -76,10 +76,19 @@
             background-color: #f8f9fa;
         }
         .report-btn {
-            position: absolute;
-            bottom: 100px;
-            right: 20px;
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
             z-index: 1000;
+            padding: 10px 20px;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            border-radius: 30px;
+            transition: all 0.3s ease;
+        }
+        .report-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.4);
         }
         #reportModal .modal-body {
             max-height: 70vh;
@@ -92,6 +101,60 @@
             border-radius: 12px;
             font-size: 0.8rem;
             margin-left: 10px;
+        }
+
+        .border-danger {
+            border-radius: 10px;
+        }
+            /* .border-danger:hover {
+            border: 1px solid blue;
+            } */
+        .object-list {
+            position: absolute;
+            top: 140px;
+            left: 10px;
+            width: 300px;
+            max-height: calc(100vh - 130px);
+            overflow-y: auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            z-index: 1000;
+        }
+        .object-item {
+            padding: 10px;
+            border-bottom: 1px solid #e9ecef;
+            cursor: pointer;
+        }
+        .object-item:hover {
+            background-color: #f8f9fa;
+        }
+        .object-info {
+            margin-top: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .priority-high {
+            background-color: #dc3545;
+            color: white;
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .priority-medium {
+            background-color: #fd7e14;
+            color: white;
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .priority-low {
+            background-color: #20c997;
+            color: white;
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 4px;
         }
     </style>
 </head>
@@ -127,6 +190,27 @@
 
     <div id="map"></div>
 
+    <div class="object-list">
+        <h6>Останні повідомлення</h6>
+        <div class="form-group mb-3">
+            <select class="form-select form-select-sm" id="filterStatus">
+                <option value="all">Всі статуси</option>
+                <option value="mined">Заміновані</option>
+                <option value="unconfirmed">Непідтверджені</option>
+                <option value="demined">Розміновані</option>
+            </select>
+        </div>
+        <div class="form-group mb-3">
+            <select class="form-select form-select-sm" id="filterRegion">
+                <option value="all">Всі регіони</option>
+                <!-- Регіони будуть додані динамічно -->
+            </select>
+        </div>
+        <div id="objectsList">
+            <!-- Will be populated dynamically -->
+        </div>
+    </div>
+
     <div class="status-legend">
         <div class="status-item">
             <div class="status-color red"></div>
@@ -143,6 +227,10 @@
         <div class="status-item">
             <div class="status-color green"></div>
             <span>Розмінована</span>
+        </div>
+        <div class="status-item">
+            <div class="status-color border border-danger bg-transparent"></div>
+            <span>Червона зона</span>
         </div>
     </div>
 
@@ -169,12 +257,9 @@
         </button>
     </div>
 
-    <button class="btn btn-warning report-btn" data-bs-toggle="modal" data-bs-target="#reportModal">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-exclamation-triangle" viewBox="0 0 16 16">
-            <path d="M7.938 2.016A.13.13 0 0 1 8.002 2a.13.13 0 0 1 .063.016.146.146 0 0 1 .054.057l6.857 11.667c.036.06.035.124.002.183a.163.163 0 0 1-.054.06.116.116 0 0 1-.066.017H1.146a.115.115 0 0 1-.066-.017.163.163 0 0 1-.054-.06.176.176 0 0 1 .002-.183L7.884 2.073a.147.147 0 0 1 .054-.057zm1.044-.45a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566z"/>
-            <path d="M7.002 12a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 5.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995z"/>
-        </svg>
-        Повідомити про небезпеку
+    <!-- Button to report danger -->
+    <button class="btn btn-danger report-btn" id="reportDangerBtn">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>Повідомити про небезпеку
     </button>
 
     <!-- Modal for reporting danger -->
@@ -186,6 +271,24 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Фото ситуації</label>
+                            <div class="camera-wrapper position-relative mb-2" style="width:100%; height:300px; background-color:#000;">
+                                <video id="cameraPreview" style="width:100%; height:100%; object-fit:cover;" autoplay muted></video>
+                                <canvas id="photoCanvas" style="display:none; width:100%; height:100%;"></canvas>
+                                <div id="gpsStatus" class="position-absolute top-0 end-0 p-2 badge bg-warning">Отримання GPS...</div>
+                                <div id="photoCountdown" class="position-absolute top-50 start-50 translate-middle badge bg-danger fs-1" style="display:none;">10</div>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <button type="button" id="startCamera" class="btn btn-sm btn-primary">Увімкнути камеру</button>
+                                <button type="button" id="takePhoto" class="btn btn-sm btn-success" disabled>Зробити фото</button>
+                                <button type="button" id="retakePhoto" class="btn btn-sm btn-secondary" style="display:none;">Перезняти</button>
+                            </div>
+                            <input type="hidden" id="photoData" name="photoData">
+                            <small class="form-text text-muted">
+                                <i class="bi bi-info-circle"></i> Для точного визначення місцезнаходження залишайтесь на місці під час фотографування.
+                            </small>
+                        </div>
                     <form id="reportForm">
                         <div class="mb-3">
                             <label for="title" class="form-label">Назва</label>
@@ -197,12 +300,12 @@
                         </div>
                         <div class="mb-3">
                             <label for="latitude" class="form-label">Широта</label>
-                            <input type="number" step="any" class="form-control" id="latitude" required>
-                            <small class="form-text text-muted">Клікніть на карті, щоб вибрати місце розташування</small>
+                            <input type="number" step="any" class="form-control" id="latitude" required readonly>
+                            <small class="form-text text-muted">GPS-координати визначаються автоматично</small>
                         </div>
                         <div class="mb-3">
                             <label for="longitude" class="form-label">Довгота</label>
-                            <input type="number" step="any" class="form-control" id="longitude" required>
+                            <input type="number" step="any" class="form-control" id="longitude" required readonly>
                         </div>
                         <div class="mb-3">
                             <label for="region" class="form-label">Регіон</label>
@@ -221,36 +324,1099 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="/static/js/citizen_map.js"></script>
-    <script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
+    
     <script>
-        // Загружаем Google Maps API
-        const apiKey = "{{ google_maps_api_key }}";
-        const apiUrl = apiKey && apiKey !== "YOUR_GOOGLE_MAPS_API_KEY_HERE" && apiKey !== ""
-            ? `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&callback=initMap`
-            : `https://maps.googleapis.com/maps/api/js?loading=async&callback=initMap`;
-    
-        if (!apiKey || apiKey === "YOUR_GOOGLE_MAPS_API_KEY_HERE" || apiKey === "") {
-            console.warn("API-ключ Google Maps не указан. Карта может работать с ограничениями (водяной знак).");
-        }
-    
-        // Создаем скрипт динамически
-        const script = document.createElement('script');
-        script.src = apiUrl;
-        script.async = true;
-        script.defer = true;
-        script.onerror = () => {
-            console.error("Ошибка загрузки Google Maps API. Проверьте подключение к интернету или API-ключ.");
-            const mapElement = document.getElementById("map");
-            if (mapElement) {
-                mapElement.innerHTML = `
-                    <div class="alert alert-danger">
-                        Не удалось загрузить карту. Проверьте подключение к интернету или API-ключ.
-                    </div>`;
-                mapElement.style.height = 'auto';
+        let map;
+        let markers = [];
+        let explosiveObjects = [];
+        let currentInfoWindow = null;
+        let regions = []; // For storing regions data
+        let cameraStream = null;
+        let photoCountdown = 0;
+        let gpsWatchId = null;
+        let gpsPositions = [];
+        let locationStable = false;
+
+        // Функція ініціалізації карти
+        function initMap() {
+            // Центр України
+            const ukraineCenter = { lat: 49.0275, lng: 31.4828 };
+            
+            // Створення карти
+            map = new google.maps.Map(document.getElementById("map"), {
+                zoom: 6,
+                center: ukraineCenter,
+                mapTypeId: google.maps.MapTypeId.TERRAIN,
+                fullscreenControl: false // Вимикаємо кнопку повноекранного режиму
+            });
+            
+            // Завантаження даних про небезпечні об'єкти
+            fetch('/api/explosive-objects')
+                .then(response => response.json())
+                .then(data => {
+                    explosiveObjects = data;
+                    addExplosiveObjectsToMap();
+                    renderObjects(); // Відображаємо список об'єктів
+                })
+                .catch(error => console.error('Помилка завантаження даних:', error));
+            
+            // Завантаження регіонів для форми
+            fetch('/api/regions')
+                .then(response => response.json())
+                .then(data => {
+                    regions = data;
+                    populateRegionsDropdown();
+                })
+                .catch(error => console.error('Помилка завантаження регіонів:', error));
+            
+            // Зум контроль
+            document.getElementById('zoomIn').addEventListener('click', function() {
+                map.setZoom(map.getZoom() + 1);
+            });
+            
+            document.getElementById('zoomOut').addEventListener('click', function() {
+                map.setZoom(map.getZoom() - 1);
+            });
+            
+            // Додаємо обробник для кнопки фільтрації
+            const filterStatus = document.getElementById('filterStatus');
+            if (filterStatus) {
+                filterStatus.addEventListener('change', renderObjects);
             }
-        };
+            
+            // Кнопка повідомлення про небезпеку
+            document.getElementById('reportDangerBtn').addEventListener('click', function() {
+                // Відкриваємо модальне вікно для повідомлення про небезпеку
+                const reportModal = new bootstrap.Modal(document.getElementById('reportModal'));
+                reportModal.show();
+                
+                // Запускаємо GPS відстеження
+                startGpsTracking();
+            });
+            
+            // Функціональність для модального вікна
+            const reportModal = document.getElementById('reportModal');
+            if (reportModal) {
+                // Обробник для події відкриття модального вікна
+                reportModal.addEventListener('shown.bs.modal', function() {
+                    // Запускаємо GPS відстеження
+                    startGpsTracking();
+                    
+                    // Додаємо обробники для кнопок камери
+                    document.getElementById('startCamera').addEventListener('click', startCamera);
+                    document.getElementById('takePhoto').addEventListener('click', startPhotoCountdown);
+                    document.getElementById('retakePhoto').addEventListener('click', retakePhoto);
+                });
+                
+                // Обробник для події закриття модального вікна
+                reportModal.addEventListener('hidden.bs.modal', function() {
+                    // Зупиняємо камеру і GPS відстеження
+                    stopCamera();
+                    stopGpsTracking();
+                });
+            }
+            
+            // Обробник для відправки форми повідомлення
+            document.getElementById('submitReport').addEventListener('click', submitDangerReport);
+            
+            // Викликаємо функцію додавання замінованих територій
+            addMinedTerritories();
+        }
+
+        // Заповнення випадаючого списку регіонів
+        function populateRegionsDropdown() {
+            const regionSelect = document.getElementById('region');
+            regionSelect.innerHTML = '';
+            
+            // Додавання опцій для всіх регіонів
+            regions.forEach(region => {
+                const option = document.createElement('option');
+                option.value = region.id;
+                option.textContent = region.name;
+                regionSelect.appendChild(option);
+            });
+        }
+
+        // Функція для запуску GPS відстеження
+        function startGpsTracking() {
+            // Очищаємо попередні дані
+            gpsPositions = [];
+            locationStable = false;
+            
+            // Перевіряємо підтримку геолокації в браузері
+            if (!navigator.geolocation) {
+                alert('Ваш браузер не підтримує геолокацію');
+                return;
+            }
+            
+            // Оновлюємо індикатор статусу GPS
+            const gpsStatus = document.getElementById('gpsStatus');
+            if (gpsStatus) {
+                gpsStatus.textContent = 'Отримання GPS...';
+                gpsStatus.className = 'position-absolute top-0 end-0 p-2 badge bg-warning';
+            }
+            
+            // Запускаємо відстеження позиції
+            gpsWatchId = navigator.geolocation.watchPosition(
+                // Успішне отримання позиції
+                (position) => {
+                    const { latitude, longitude, accuracy } = position.coords;
+                    console.log(`GPS: ${latitude}, ${longitude} (точність: ${accuracy}м)`);
+                    
+                    // Додаємо нову позицію в масив
+                    gpsPositions.push({ latitude, longitude, accuracy, timestamp: Date.now() });
+                    
+                    // Якщо у нас зібрано більше 5 позицій
+                    if (gpsPositions.length > 5) {
+                        // Видаляємо найстарішу позицію
+                        gpsPositions.shift();
+                        
+                        // Перевіряємо стабільність позиції
+                        checkPositionStability();
+                    }
+                    
+                    // Оновлюємо поля форми
+                    document.getElementById('latitude').value = latitude;
+                    document.getElementById('longitude').value = longitude;
+                },
+                // Помилка отримання позиції
+                (error) => {
+                    console.error('Помилка GPS:', error);
+                    const gpsStatus = document.getElementById('gpsStatus');
+                    if (gpsStatus) {
+                        gpsStatus.textContent = 'Помилка GPS!';
+                        gpsStatus.className = 'position-absolute top-0 end-0 p-2 badge bg-danger';
+                    }
+                    
+                    switch (error.code) {
+                        case error.PERMISSION_DENIED:
+                            alert('Ви заборонили доступ до геолокації');
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            alert('Інформація про позицію недоступна');
+                            break;
+                        case error.TIMEOUT:
+                            alert('Минув час очікування отримання позиції');
+                            break;
+                        default:
+                            alert('Невідома помилка геолокації');
+                    }
+                },
+                // Налаштування геолокації
+                {
+                    enableHighAccuracy: true, // Висока точність
+                    maximumAge: 0,           // Не використовувати кешовані дані
+                    timeout: 15000           // Таймаут 15 секунд
+                }
+            );
+        }
+        
+        // Функція для перевірки стабільності позиції
+        function checkPositionStability() {
+            // Беремо останні 5 позицій
+            const recentPositions = gpsPositions.slice(-5);
+            
+            // Розраховуємо середню точність
+            const avgAccuracy = recentPositions.reduce((sum, pos) => sum + pos.accuracy, 0) / recentPositions.length;
+            
+            // Перевіряємо, чи не занадто великий розкид у координатах
+            let maxDistance = 0;
+            for (let i = 0; i < recentPositions.length - 1; i++) {
+                for (let j = i + 1; j < recentPositions.length; j++) {
+                    const distance = calculateDistance(
+                        recentPositions[i].latitude, recentPositions[i].longitude,
+                        recentPositions[j].latitude, recentPositions[j].longitude
+                    );
+                    maxDistance = Math.max(maxDistance, distance);
+                }
+            }
+            
+            // Якщо максимальна відстань менше середньої точності, вважаємо позицію стабільною
+            locationStable = maxDistance < avgAccuracy;
+            
+            // Оновлюємо індикатор статусу GPS
+            const gpsStatus = document.getElementById('gpsStatus');
+            if (gpsStatus) {
+                if (locationStable) {
+                    gpsStatus.textContent = 'GPS стабільний';
+                    gpsStatus.className = 'position-absolute top-0 end-0 p-2 badge bg-success';
+                    
+                    // Активуємо кнопку фото, якщо GPS стабільний
+                    const takePhotoBtn = document.getElementById('takePhoto');
+                    if (takePhotoBtn && cameraStream) {
+                        takePhotoBtn.disabled = false;
+                    }
+                } else {
+                    gpsStatus.textContent = 'Стабілізація GPS...';
+                    gpsStatus.className = 'position-absolute top-0 end-0 p-2 badge bg-warning';
+                    
+                    // Деактивуємо кнопку фото, якщо GPS нестабільний
+                    const takePhotoBtn = document.getElementById('takePhoto');
+                    if (takePhotoBtn) {
+                        takePhotoBtn.disabled = true;
+                    }
+                }
+            }
+        }
+        
+        // Функція для зупинки GPS відстеження
+        function stopGpsTracking() {
+            if (gpsWatchId !== null) {
+                navigator.geolocation.clearWatch(gpsWatchId);
+                gpsWatchId = null;
+            }
+        }
+        
+        // Функція для розрахунку відстані між двома точками
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000; // Радіус Землі в метрах
+            const dLat = toRadians(lat2 - lat1);
+            const dLon = toRadians(lon2 - lon1);
+            const a = 
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * 
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c; // Відстань у метрах
+        }
+        
+        // Конвертація градусів у радіани
+        function toRadians(degrees) {
+            return degrees * Math.PI / 180;
+        }
+        
+        // Функція для запуску камери
+        async function startCamera() {
+            try {
+                // Перевіряємо підтримку камери в браузері
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    alert('Ваш браузер не підтримує доступ до камери');
+                    return;
+                }
+                
+                // Запитуємо доступ до камери
+                cameraStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' }, // Використовуємо задню камеру на мобільних пристроях
+                    audio: false
+                });
+                
+                // Відображаємо превью камери
+                const videoElement = document.getElementById('cameraPreview');
+                videoElement.srcObject = cameraStream;
+                videoElement.style.display = 'block';
+                
+                // Ховаємо canvas з фото, якщо він був відображений
+                const photoCanvas = document.getElementById('photoCanvas');
+                if (photoCanvas) {
+                    photoCanvas.style.display = 'none';
+                }
+                
+                // Активуємо кнопку фото, якщо GPS стабільний
+                const takePhoto = document.getElementById('takePhoto');
+                if (takePhoto) {
+                    takePhoto.disabled = !locationStable;
+                }
+                
+                // Деактивуємо кнопку запуску камери
+                const startCamera = document.getElementById('startCamera');
+                if (startCamera) {
+                    startCamera.disabled = true;
+                }
+                
+                // Ховаємо кнопку перезняти
+                const retakePhoto = document.getElementById('retakePhoto');
+                if (retakePhoto) {
+                    retakePhoto.style.display = 'none';
+                }
+                
+                console.log('Камера успішно запущена');
+            } catch (error) {
+                console.error('Помилка при запуску камери:', error);
+                alert('Не вдалося отримати доступ до камери: ' + error.message);
+            }
+        }
+        
+        // Функція запуску відліку для фото
+        function startPhotoCountdown() {
+            // Перевіряємо, чи стабільна позиція GPS
+            if (!locationStable) {
+                alert('Дочекайтеся стабілізації GPS для точних координат (необхідно залишатися на місці)');
+                return;
+            }
+            
+            // Починаємо відлік з 10 секунд
+            photoCountdown = 10;
+            const countdownElement = document.getElementById('photoCountdown');
+            if (countdownElement) {
+                countdownElement.textContent = photoCountdown;
+                countdownElement.style.display = 'block';
+            }
+            
+            // Деактивуємо кнопку фото під час відліку
+            const takePhoto = document.getElementById('takePhoto');
+            if (takePhoto) {
+                takePhoto.disabled = true;
+            }
+            
+            // Зберігаємо поточні координати GPS для перевірки стабільності
+            const currentPositions = [...gpsPositions];
+            
+            // Запускаємо інтервал для відліку
+            const countdownInterval = setInterval(() => {
+                photoCountdown--;
+                
+                // Оновлюємо відображення відліку
+                if (countdownElement) {
+                    countdownElement.textContent = photoCountdown;
+                }
+                
+                // Перевіряємо, чи не перемістився користувач під час відліку
+                const locationChanged = hasLocationChanged(currentPositions, gpsPositions);
+                if (!locationStable || locationChanged) {
+                    clearInterval(countdownInterval);
+                    if (countdownElement) {
+                        countdownElement.style.display = 'none';
+                    }
+                    if (takePhoto) {
+                        takePhoto.disabled = !locationStable;
+                    }
+                    alert('Ви рухаєтесь. Залишайтеся на місці для отримання точних координат.');
+                    return;
+                }
+                
+                // Якщо відлік завершено, робимо фото
+                if (photoCountdown <= 0) {
+                    clearInterval(countdownInterval);
+                    if (countdownElement) {
+                        countdownElement.style.display = 'none';
+                    }
+                    capturePhoto();
+                }
+            }, 1000);
+        }
+        
+        // Функція для перевірки, чи змінилося місцезнаходження користувача
+        function hasLocationChanged(oldPositions, newPositions) {
+            if (oldPositions.length < 2 || newPositions.length < 2) return false;
+            
+            // Беремо останні позиції
+            const oldLat = oldPositions[oldPositions.length - 1].latitude;
+            const oldLng = oldPositions[oldPositions.length - 1].longitude;
+            const newLat = newPositions[newPositions.length - 1].latitude;
+            const newLng = newPositions[newPositions.length - 1].longitude;
+            
+            // Розраховуємо відстань між позиціями
+            const distance = calculateDistance(oldLat, oldLng, newLat, newLng);
+            
+            // Якщо відстань більше 5 метрів, вважаємо що місцезнаходження змінилося
+            return distance > 5;
+        }
+        
+        // Функція для створення фото
+        function capturePhoto() {
+            if (!cameraStream) {
+                alert('Камера не активована');
+                return;
+            }
+            
+            try {
+                // Отримуємо елементи відео та canvas
+                const videoElement = document.getElementById('cameraPreview');
+                const canvasElement = document.getElementById('photoCanvas');
+                if (!videoElement || !canvasElement) return;
+                
+                const context = canvasElement.getContext('2d');
+                
+                // Встановлюємо розміри canvas рівними розмірам відео
+                canvasElement.width = videoElement.videoWidth;
+                canvasElement.height = videoElement.videoHeight;
+                
+                // Малюємо поточний кадр відео на canvas
+                context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+                
+                // Отримуємо дані фото у форматі Base64
+                const photoData = canvasElement.toDataURL('image/jpeg');
+                
+                // Зберігаємо дані фото у приховане поле
+                const photoDataField = document.getElementById('photoData');
+                if (photoDataField) {
+                    photoDataField.value = photoData;
+                }
+                
+                // Показуємо canvas з фото та ховаємо відео
+                videoElement.style.display = 'none';
+                canvasElement.style.display = 'block';
+                
+                // Зупиняємо камеру
+                stopCamera();
+                
+                // Показуємо кнопку "Перезняти" та деактивуємо кнопку "Зробити фото"
+                const retakePhoto = document.getElementById('retakePhoto');
+                const takePhoto = document.getElementById('takePhoto');
+                const startCameraBtn = document.getElementById('startCamera');
+                
+                if (retakePhoto) retakePhoto.style.display = 'inline-block';
+                if (takePhoto) takePhoto.disabled = true;
+                if (startCameraBtn) startCameraBtn.disabled = false;
+                
+                console.log('Фото успішно зроблено');
+            } catch (error) {
+                console.error('Помилка при створенні фото:', error);
+                alert('Не вдалося зробити фото: ' + error.message);
+            }
+        }
+        
+        // Функція для повторного створення фото
+        function retakePhoto() {
+            // Очищаємо дані попереднього фото
+            const photoDataField = document.getElementById('photoData');
+            if (photoDataField) {
+                photoDataField.value = '';
+            }
+            
+            // Запускаємо камеру знову
+            startCamera();
+        }
+        
+        // Функція для зупинки камери
+        function stopCamera() {
+            if (cameraStream) {
+                // Зупиняємо всі треки камери
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+            }
+        }
+        
+        // Функція відображення списку об'єктів
+        function renderObjects() {
+            const objectsList = document.getElementById('objectsList');
+            if (!objectsList) return;
+            
+            // Очищаємо поточний список
+            objectsList.innerHTML = '';
+            
+            // Отримуємо вибраний фільтр статусу
+            const statusFilter = document.getElementById('filterStatus').value;
+            
+            // Створюємо відфільтрований список об'єктів
+            let filteredObjects = explosiveObjects;
+            if (statusFilter !== 'all') {
+                filteredObjects = explosiveObjects.filter(obj => {
+                    // Конвертуємо назви статусів для коректного відображення
+                    const mappedStatus = 
+                        obj.status === 'active' ? 'mined' : 
+                        obj.status === 'cleared' ? 'demined' : 
+                        obj.status;
+                    
+                    return mappedStatus === statusFilter;
+                });
+            }
+            
+            // Сортуємо об'єкти за датою (найновіші вгорі)
+            filteredObjects.sort((a, b) => new Date(b.reported_at) - new Date(a.reported_at));
+            
+            // Якщо список порожній, показуємо повідомлення
+            if (filteredObjects.length === 0) {
+                objectsList.innerHTML = '<div class="alert alert-info py-2">Немає об\'єктів для відображення.</div>';
+                return;
+            }
+            
+            // Відображаємо тільки перші 20 об'єктів для продуктивності
+            const maxObjects = 20;
+            const objectsToShow = filteredObjects.slice(0, maxObjects);
+            
+            // Додаємо кожен об'єкт у список
+            objectsToShow.forEach(obj => {
+                const itemElement = document.createElement('div');
+                itemElement.className = 'object-item';
+                itemElement.dataset.objectId = obj.id;
+                
+                // Форматуємо дату
+                const reportedDate = new Date(obj.reported_at);
+                const formattedDate = reportedDate.toLocaleDateString('uk-UA');
+                
+                // Отримуємо класи для статусу і пріоритету
+                const statusClass = getStatusClass(obj.status);
+                const priorityClass = getPriorityClass(obj.priority);
+                
+                // Створюємо HTML для елемента списку
+                itemElement.innerHTML = `
+                    <div>
+                        <strong>${obj.title}</strong>
+                        <span class="badge ${statusClass} ms-2">${getStatusName(obj.status)}</span>
+                    </div>
+                    <div class="object-info">
+                        <span>${obj.region_name}</span>
+                        <span class="${priorityClass}">${getPriorityName(obj.priority)}</span>
+                    </div>
+                    <div class="small text-muted">${formattedDate}</div>
+                `;
+                
+                // Додаємо обробник кліка для переходу до об'єкта
+                itemElement.addEventListener('click', () => {
+                    // Переходимо до об'єкта на карті
+                    map.setCenter({lat: obj.latitude, lng: obj.longitude});
+                    map.setZoom(15);
+                    
+                    // Знаходимо маркер і відкриваємо його інфо-вікно
+                    markers.forEach(marker => {
+                        try {
+                            const markerLat = marker.getPosition().lat();
+                            const markerLng = marker.getPosition().lng();
+                            
+                            if (Math.abs(markerLat - obj.latitude) < 0.00001 && 
+                                Math.abs(markerLng - obj.longitude) < 0.00001) {
+                                google.maps.event.trigger(marker, 'click');
+                            }
+                        } catch (e) {}
+                    });
+                });
+                
+                // Додаємо елемент у список
+                objectsList.appendChild(itemElement);
+            });
+            
+            // Якщо є ще об'єкти, показуємо повідомлення
+            if (filteredObjects.length > maxObjects) {
+                const moreItems = document.createElement('div');
+                moreItems.className = 'text-center mt-2';
+                moreItems.innerHTML = `<small class="text-muted">+ ще ${filteredObjects.length - maxObjects} об'єктів</small>`;
+                objectsList.appendChild(moreItems);
+            }
+        }
+        
+        // Допоміжні функції для стилізації
+        function getStatusClass(status) {
+            switch(status) {
+                case 'active': return 'bg-danger'; // червоний
+                case 'mined': return 'bg-danger'; // червоний
+                case 'unconfirmed': return 'bg-warning text-dark'; // жовтий
+                case 'archived': return 'bg-secondary'; // сірий
+                case 'cleared': return 'bg-success'; // зелений
+                case 'demined': return 'bg-success'; // зелений
+                default: return 'bg-secondary'; // сірий за замовчуванням
+            }
+        }
+        
+        function getPriorityClass(priority) {
+            switch(priority) {
+                case 'high': return 'priority-high';
+                case 'medium': return 'priority-medium';
+                case 'low': return 'priority-low';
+                default: return 'priority-medium';
+            }
+        }
+
+        // Функція відправки форми повідомлення про небезпеку
+        async function submitDangerReport() {
+            try {
+                // Отримання даних з форми
+                const title = document.getElementById('title').value;
+                const description = document.getElementById('description').value;
+                const latitude = parseFloat(document.getElementById('latitude').value);
+                const longitude = parseFloat(document.getElementById('longitude').value);
+                const regionId = parseInt(document.getElementById('region').value);
+                const photoData = document.getElementById('photoData').value;
+                
+                // Перевірка обов'язкових полів
+                if (!title || isNaN(latitude) || isNaN(longitude) || isNaN(regionId)) {
+                    alert('Будь ласка, заповніть всі обов\'язкові поля.');
+                    return;
+                }
+                
+                // Перевірка наявності фото
+                if (!photoData) {
+                    alert('Необхідно зробити фото для точного визначення місцезнаходження та підтвердження події.');
+                    return;
+                }
+                
+                // Перевірка стабільності GPS
+                if (!locationStable) {
+                    alert('Ваше місцезнаходження не стабільне. Будь ласка, залишайтеся на місці для отримання точних координат.');
+                    return;
+                }
+                
+                // Відображення індикатора завантаження
+                const submitBtn = document.getElementById('submitReport');
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Відправка...';
+                
+                // Створення даних для відправки
+                const reportData = {
+                    title: title,
+                    description: description,
+                    latitude: latitude,
+                    longitude: longitude,
+                    status: 'unconfirmed', // Статус за замовчуванням для користувачів
+                    priority: 'medium', // Пріоритет за замовчуванням для користувачів
+                    region_id: regionId,
+                    photo_data: photoData // Додаємо фото в Base64
+                };
+                
+                // Відправка запиту на сервер
+                const response = await fetch('/api/report-danger', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(reportData)
+                });
+                
+                // Обробка відповіді
+                if (!response.ok) {
+                    let errorMessage = `Помилка сервера: ${response.status} ${response.statusText}`;
+                    
+                    try {
+                        // Намагаємося отримати текст помилки
+                        const responseText = await response.text();
+                        
+                        // Перевіряємо, чи є відповідь валідним JSON
+                        try {
+                            const errorData = JSON.parse(responseText);
+                            errorMessage = errorData.detail || errorData.message || errorMessage;
+                        } catch (jsonError) {
+                            // Якщо не можемо розібрати як JSON, використовуємо текст як є
+                            if (responseText && responseText.length < 100) {
+                                errorMessage = responseText;
+                            }
+                        }
+                    } catch (textError) {
+                        console.error('Не вдалося отримати текст помилки:', textError);
+                    }
+                    
+                    throw new Error(errorMessage);
+                }
+                
+                // Отримання даних про створений об'єкт
+                const createdObject = await response.json();
+                console.log('Об\'єкт успішно створено:', createdObject);
+                
+                // Очищення форми
+                document.getElementById('reportForm').reset();
+                document.getElementById('photoData').value = '';
+                
+                // Закриття модального вікна
+                const modal = bootstrap.Modal.getInstance(document.getElementById('reportModal'));
+                modal.hide();
+                
+                // Зупинка GPS та камери
+                stopGpsTracking();
+                stopCamera();
+                
+                // Оновлення об'єктів на карті та в списку
+                await fetch('/api/explosive-objects')
+                    .then(response => response.json())
+                    .then(data => {
+                        explosiveObjects = data;
+                        addExplosiveObjectsToMap();
+                        renderObjects();
+                    })
+                    .catch(error => console.error('Помилка оновлення даних:', error));
+                
+                // Показати повідомлення про успіх
+                alert('Повідомлення про небезпеку успішно надіслано. Дякуємо за вашу пильність!');
+                
+            } catch (error) {
+                console.error('Помилка при відправці повідомлення:', error);
+                alert(`Помилка: ${error.message}`);
+            } finally {
+                // Відновлення кнопки відправки
+                const submitBtn = document.getElementById('submitReport');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = 'Відправити повідомлення';
+                }
+            }
+        }
+
+        // Функція додавання небезпечних об'єктів на карту
+        function addExplosiveObjectsToMap() {
+            // Очищаємо існуючі маркери
+            clearMarkers();
+            
+            // Додаємо маркери для кожного об'єкта
+            explosiveObjects.forEach(obj => {
+                addMarker(obj);
+            });
+        }
+
+        // Функція додавання маркера
+        function addMarker(object) {
+            const statusColors = {
+                'active': '#ef4444',     // червоний
+                'unconfirmed': '#f59e0b', // жовтий
+                'archived': '#6b7280',    // сірий
+                'cleared': '#10b981',     // зелений
+                'secret': '#8b5cf6'       // фіолетовий
+            };
+            
+            const markerColor = statusColors[object.status] || '#f59e0b';
+            let markerIcon = null;
+            
+            // Перевіряємо, чи це кластер (групування прапорців для мінних полів)
+            if (object.is_cluster) {
+                // Використовуємо іконку прапорця для мінних полів
+                markerIcon = {
+                    path: 'M10,1.375c-3.17,0-5.75,2.548-5.75,5.682c0,6.685,5.259,11.276,5.483,11.469c0.152,0.132,0.382,0.132,0.534,0c0.224-0.193,5.481-4.784,5.483-11.469C15.75,3.923,13.171,1.375,10,1.375 M10,17.653c-1.064-1.024-4.929-5.127-4.929-10.596c0-2.68,2.212-4.861,4.929-4.861s4.929,2.181,4.929,4.861C14.927,12.518,11.063,16.627,10,17.653 M10,3.839c-1.815,0-3.286,1.47-3.286,3.286s1.47,3.286,3.286,3.286s3.286-1.47,3.286-3.286S11.815,3.839,10,3.839 M10,9.589c-1.359,0-2.464-1.105-2.464-2.464S8.641,4.661,10,4.661s2.464,1.105,2.464,2.464S11.359,9.589,10,9.589',
+                    fillColor: getDangerLevelColor(object.danger_level),
+                    fillOpacity: 0.9,
+                    strokeColor: '#000000',
+                    strokeWeight: 1,
+                    scale: 1.8,
+                    anchor: new google.maps.Point(10, 17)
+                };
+            } else {
+                // Стандартний кружечок для звичайних об'єктів
+                markerIcon = {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    fillColor: markerColor,
+                    fillOpacity: 0.7,
+                    strokeWeight: 1,
+                    strokeColor: '#FFFFFF',
+                    scale: 10
+                };
+            }
+            
+            const marker = new google.maps.Marker({
+                position: { lat: object.latitude, lng: object.longitude },
+                map: map,
+                title: object.title,
+                icon: markerIcon
+            });
+            
+            // Створення інформаційного вікна
+            const infoWindow = new google.maps.InfoWindow({
+                content: `
+                    <div style="max-width: 300px;">
+                        <h5>${object.title}</h5>
+                        <p>${object.description || 'Опис відсутній'}</p>
+                        <p><strong>Статус:</strong> ${getStatusName(object.status)}</p>
+                        ${object.is_cluster ? `<p><strong>Рівень небезпеки:</strong> ${object.danger_level || 'Середній'}</p>` : ''}
+                        ${object.is_cluster ? `<p><strong>Площа:</strong> ${object.area_size ? object.area_size + ' кв. км' : 'Не вказано'}</p>` : ''}
+                        <p><strong>Пріоритет:</strong> ${getPriorityName(object.priority)}</p>
+                        <p><strong>Регіон:</strong> ${object.region_name}</p>
+                        <p><small>Повідомлено: ${formatDate(object.reported_at)}</small></p>
+                        ${object.photo_url ? `<p><img src="${object.photo_url}" style="max-width: 100%; height: auto;" alt="Фото об'єкта"></p>` : ''}
+                    </div>
+                `
+            });
+            
+            // Обробник кліку
+            marker.addListener('click', () => {
+                if (currentInfoWindow) {
+                    currentInfoWindow.close();
+                }
+                infoWindow.open(map, marker);
+                currentInfoWindow = infoWindow;
+            });
+            
+            // Додаємо маркер до масиву
+            markers.push(marker);
+            
+            // Якщо це кластер з площею, створюємо коло для відображення території
+            if (object.is_cluster && object.area_size) {
+                // Розрахунок радіусу кола на основі площі
+                const circleRadius = calculateCircleRadius(object.area_size);
+                
+                // Створення кола для відображення зони
+                const territoryCircle = new google.maps.Circle({
+                    strokeColor: markerColor,
+                    strokeOpacity: 0.8,
+                    strokeWeight: 2,
+                    fillColor: markerColor,
+                    fillOpacity: 0.2,
+                    map: map,
+                    center: { lat: object.latitude, lng: object.longitude },
+                    radius: circleRadius
+                });
+                
+                // Якщо площа велика, створюємо додаткові прапорці
+                if (circleRadius > 5000) {
+                    createFlagCluster(object, circleRadius);
+                }
+            }
+        }
+        
+        // Функція для створення кластеру прапорців
+        function createFlagCluster(object, radius) {
+            // Кількість прапорців залежить від розміру зони
+            const flagCount = Math.min(Math.floor(radius / 5000), 8);
+            
+            // Створюємо прапорці навколо центру
+            for (let i = 0; i < flagCount; i++) {
+                // Розраховуємо випадкове положення в межах круга
+                const angle = Math.random() * 2 * Math.PI;
+                const distance = Math.random() * (radius * 0.7); // Не ближче до краю кола
+                
+                const offsetLat = distance * Math.cos(angle) / 111111; // Приблизне перетворення метрів у градуси широти
+                const offsetLng = distance * Math.sin(angle) / (111111 * Math.cos(object.latitude * Math.PI / 180));
+                
+                const flagPosition = {
+                    lat: object.latitude + offsetLat,
+                    lng: object.longitude + offsetLng
+                };
+                
+                // Створюємо маркер з іконкою прапорця
+                const flagMarker = new google.maps.Marker({
+                    position: flagPosition,
+                    map: map,
+                    title: `${object.title} - мінне поле`,
+                    icon: {
+                        // Використовуємо SVG для прапорця
+                        path: 'M10,1.375c-3.17,0-5.75,2.548-5.75,5.682c0,6.685,5.259,11.276,5.483,11.469c0.152,0.132,0.382,0.132,0.534,0c0.224-0.193,5.481-4.784,5.483-11.469C15.75,3.923,13.171,1.375,10,1.375 M10,17.653c-1.064-1.024-4.929-5.127-4.929-10.596c0-2.68,2.212-4.861,4.929-4.861s4.929,2.181,4.929,4.861C14.927,12.518,11.063,16.627,10,17.653 M10,3.839c-1.815,0-3.286,1.47-3.286,3.286s1.47,3.286,3.286,3.286s3.286-1.47,3.286-3.286S11.815,3.839,10,3.839 M10,9.589c-1.359,0-2.464-1.105-2.464-2.464S8.641,4.661,10,4.661s2.464,1.105,2.464,2.464S11.359,9.589,10,9.589',
+                        fillColor: getDangerLevelColor(object.danger_level),
+                        fillOpacity: 0.8,
+                        strokeColor: '#000000',
+                        strokeWeight: 1,
+                        scale: 1.5,
+                        anchor: new google.maps.Point(10, 17)
+                    }
+                });
+                
+                // Додаємо той самий обробник для кліку, що й для головного маркера
+                const infoWindow = new google.maps.InfoWindow({
+                    content: `
+                        <div style="max-width: 300px;">
+                            <h5>${object.title}</h5>
+                            <p>${object.description || 'Опис відсутній'}</p>
+                            <p><strong>Статус:</strong> ${getStatusName(object.status)}</p>
+                            <p><strong>Рівень небезпеки:</strong> ${object.danger_level || 'Середній'}</p>
+                            <p><strong>Площа:</strong> ${object.area_size ? object.area_size + ' кв. км' : 'Не вказано'}</p>
+                            <p><strong>Регіон:</strong> ${object.region_name}</p>
+                            <p><small>Повідомлено: ${formatDate(object.reported_at)}</small></p>
+                            ${object.photo_url ? `<p><img src="${object.photo_url}" style="max-width: 100%; height: auto;" alt="Фото об'єкта"></p>` : ''}
+                        </div>
+                    `
+                });
+                
+                flagMarker.addListener('click', () => {
+                    if (currentInfoWindow) {
+                        currentInfoWindow.close();
+                    }
+                    infoWindow.open(map, flagMarker);
+                    currentInfoWindow = infoWindow;
+                });
+                
+                markers.push(flagMarker);
+            }
+        }
+        
+        // Розрахунок радіусу кола на основі площі (кв. км)
+        function calculateCircleRadius(areaSizeKm) {
+            if (!areaSizeKm) return 2000; // За замовчуванням 2 км
+
+            // Формула для розрахунку радіусу кола з його площі
+            // Площа кола = πr²
+            // r = √(Площа/π)
+            const radiusKm = Math.sqrt(areaSizeKm / Math.PI);
+            
+            // Перетворюємо км в метри для Google Maps
+            return radiusKm * 1000;
+        }
+        
+        // Отримання кольору залежно від рівня небезпеки
+        function getDangerLevelColor(dangerLevel) {
+            switch (dangerLevel) {
+                case "Критичний":
+                    return "#FF0000"; // Червоний
+                case "Високий":
+                    return "#FF3300"; // Оранжево-червоний
+                case "Середній":
+                    return "#FF9900"; // Оранжевий
+                case "Низький":
+                    return "#FFCC00"; // Жовтий
+                case "Мінімальний":
+                    return "#66CC00"; // Світло-зелений
+                default:
+                    return "#FF9900"; // За замовчуванням оранжевий
+            }
+        }
+
+        // Очищення маркерів
+        function clearMarkers() {
+            markers.forEach(marker => {
+                marker.setMap(null);
+            });
+            markers = [];
+        }
+        
+        // Функція отримання назви статусу
+        function getStatusName(status) {
+            switch(status) {
+                case 'active': return 'Замінована';
+                case 'mined': return 'Замінована';
+                case 'unconfirmed': return 'Непідтверджена';
+                case 'archived': return 'Архів';
+                case 'cleared': return 'Розмінована';
+                case 'demined': return 'Розмінована';
+                default: return 'Невідомо';
+            }
+        }
+        
+        // Функція отримання назви пріоритету
+        function getPriorityName(priority) {
+            switch(priority) {
+                case 'high': return 'Високий';
+                case 'medium': return 'Середній';
+                case 'low': return 'Низький';
+                default: return 'Середній';
+            }
+        }
+        
+        // Функція форматування дати
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString('uk-UA');
+        }
+
+        // Створення скрипту для збільшення ліміту розміру інфовікна
+        const script = document.createElement('script');
+        script.textContent = `
+            google.maps.InfoWindow.prototype.setMap = (function(original) {
+                return function(map) {
+                    this.maxWidth = 320; // Збільшуємо ширину інфовікна
+                    original.apply(this, arguments);
+                };
+            })(google.maps.InfoWindow.prototype.setMap);
+        `;
         document.head.appendChild(script);
+
+        // Додавання замінованих територій на карту користувачів
+        function addMinedTerritories() {
+            const redZoneColor = "#FF0000";
+            
+            minedTerritories.forEach(territory => {
+                if (territory.status === "Червона зона") {
+                    // Створення маркера з прапорцем замість пульсуючого маркера
+                    const marker = new google.maps.Marker({
+                        position: territory.coordinates,
+                        map: map,
+                        title: territory.name,
+                        icon: {
+                            // Використовуємо SVG для прапорця
+                            path: 'M10,1.375c-3.17,0-5.75,2.548-5.75,5.682c0,6.685,5.259,11.276,5.483,11.469c0.152,0.132,0.382,0.132,0.534,0c0.224-0.193,5.481-4.784,5.483-11.469C15.75,3.923,13.171,1.375,10,1.375 M10,17.653c-1.064-1.024-4.929-5.127-4.929-10.596c0-2.68,2.212-4.861,4.929-4.861s4.929,2.181,4.929,4.861C14.927,12.518,11.063,16.627,10,17.653 M10,3.839c-1.815,0-3.286,1.47-3.286,3.286s1.47,3.286,3.286,3.286s3.286-1.47,3.286-3.286S11.815,3.839,10,3.839 M10,9.589c-1.359,0-2.464-1.105-2.464-2.464S8.641,4.661,10,4.661s2.464,1.105,2.464,2.464S11.359,9.589,10,9.589',
+                            fillColor: getDangerLevelColor(territory.dangerLevel),
+                            fillOpacity: 0.9,
+                            strokeColor: '#000000',
+                            strokeWeight: 1,
+                            scale: 1.8,
+                            anchor: new google.maps.Point(10, 17) // Якір у нижній частині прапорця
+                        }
+                    });
+                    
+                    // Створення інформаційного вікна
+                    const infoWindow = new google.maps.InfoWindow({
+                        content: `
+                            <div class="info-window">
+                                <h5>${territory.name}</h5>
+                                <p><strong>Рівень небезпеки:</strong> ${territory.dangerLevel}</p>
+                                <p><strong>Статус:</strong> ${territory.status}</p>
+                                <p>${territory.description}</p>
+                                <p><em>${territory.notes}</em></p>
+                            </div>
+                        `
+                    });
+                    
+                    // Обробник кліку по маркеру
+                    marker.addListener("click", () => {
+                        if (currentInfoWindow) {
+                            currentInfoWindow.close();
+                        }
+                        infoWindow.open(map, marker);
+                        currentInfoWindow = infoWindow;
+                    });
+                    
+                    // Додаємо маркер до масиву
+                    markers.push(marker);
+                    
+                    // Створення кола для відображення зони
+                    const circleRadius = calculateCircleRadius(territory.affectedArea);
+                    
+                    // Створюємо кластер флажків для мінного поля
+                    createMinefieldFlagCluster(territory, circleRadius);
+                    
+                    const territoryCircle = new google.maps.Circle({
+                        strokeColor: redZoneColor,
+                        strokeOpacity: 0.8,
+                        strokeWeight: 2,
+                        fillColor: redZoneColor,
+                        fillOpacity: 0.2,
+                        map: map,
+                        center: territory.coordinates,
+                        radius: circleRadius
+                    });
+                }
+            });
+        }
+
+        // Створення кластеру прапорців для мінного поля
+        function createMinefieldFlagCluster(territory, radius) {
+            // Кількість прапорців залежить від розміру зони
+            const flagCount = Math.min(Math.floor(radius / 5000), 8);
+            
+            // Створюємо прапорці навколо центру
+            for (let i = 0; i < flagCount; i++) {
+                // Розраховуємо випадкове положення в межах круга
+                const angle = Math.random() * 2 * Math.PI;
+                const distance = Math.random() * (radius * 0.7); // Не ближче до краю кола
+                
+                const offsetLat = distance * Math.cos(angle) / 111111; // Приблизне перетворення метрів у градуси широти
+                const offsetLng = distance * Math.sin(angle) / (111111 * Math.cos(territory.coordinates.lat * Math.PI / 180));
+                
+                const flagPosition = {
+                    lat: territory.coordinates.lat + offsetLat,
+                    lng: territory.coordinates.lng + offsetLng
+                };
+                
+                // Створюємо маркер з іконкою прапорця
+                const flagMarker = new google.maps.Marker({
+                    position: flagPosition,
+                    map: map,
+                    title: `${territory.name} - мінне поле`,
+                    icon: {
+                        // Використовуємо SVG для прапорця
+                        path: 'M10,1.375c-3.17,0-5.75,2.548-5.75,5.682c0,6.685,5.259,11.276,5.483,11.469c0.152,0.132,0.382,0.132,0.534,0c0.224-0.193,5.481-4.784,5.483-11.469C15.75,3.923,13.171,1.375,10,1.375 M10,17.653c-1.064-1.024-4.929-5.127-4.929-10.596c0-2.68,2.212-4.861,4.929-4.861s4.929,2.181,4.929,4.861C14.927,12.518,11.063,16.627,10,17.653 M10,3.839c-1.815,0-3.286,1.47-3.286,3.286s1.47,3.286,3.286,3.286s3.286-1.47,3.286-3.286S11.815,3.839,10,3.839 M10,9.589c-1.359,0-2.464-1.105-2.464-2.464S8.641,4.661,10,4.661s2.464,1.105,2.464,2.464S11.359,9.589,10,9.589',
+                        fillColor: getDangerLevelColor(territory.dangerLevel),
+                        fillOpacity: 0.8,
+                        strokeColor: '#000000',
+                        strokeWeight: 1,
+                        scale: 1.5,
+                        anchor: new google.maps.Point(10, 17)
+                    }
+                });
+                
+                // Обробник кліку по прапорцю
+                flagMarker.addListener("click", () => {
+                    if (currentInfoWindow) {
+                        currentInfoWindow.close();
+                    }
+                    const infoWindow = new google.maps.InfoWindow({
+                        content: `
+                            <div class="info-window">
+                                <h5>${territory.name}</h5>
+                                <p><strong>Рівень небезпеки:</strong> ${territory.dangerLevel}</p>
+                                <p><strong>Статус:</strong> ${territory.status}</p>
+                                <p><strong>Площа:</strong> ${territory.affectedArea}</p>
+                                <p>${territory.description}</p>
+                                <p><em>${territory.notes}</em></p>
+                            </div>
+                        `
+                    });
+                    infoWindow.open(map, flagMarker);
+                    currentInfoWindow = infoWindow;
+                });
+                
+                markers.push(flagMarker);
+            }
+        }
+
+        // Додаємо функції ініціалізації карти
+        document.addEventListener("DOMContentLoaded", function() {
+            initMap();
+        });
     </script>
+    
+    <!-- Google Maps API with callback -->
+    <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap" async defer></script>
 </body>
 </html> 

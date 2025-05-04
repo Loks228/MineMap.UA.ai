@@ -103,9 +103,14 @@ async function loadExplosiveObjects() {
     try {
         const response = await fetch('/api/explosive-objects');
         if (response.ok) {
+            // Сервер уже отфильтровал секретные объекты, нет необходимости делать это на клиенте
             explosiveObjects = await response.json();
             console.log('Загружено объектов:', explosiveObjects.length);
             addMarkersToMap();
+            renderObjects(); // Вызываем функцию для отображения списка объектов
+            
+            // Загружаем регионы после получения объектов
+            loadRegions();
         } else {
             console.error('Ошибка при загрузке данных:', response.status);
         }
@@ -113,6 +118,229 @@ async function loadExplosiveObjects() {
         console.error('Ошибка при загрузке данных:', error);
     }
 }
+
+// Функция загрузки регионов
+async function loadRegions() {
+    try {
+        // Instead of loading from API, use hardcoded list of all Ukrainian regions
+        regions = [
+            { id: 1, name: 'Київ', code: 'kyiv', center_lat: 50.450001, center_lng: 30.523333, zoom_level: 10 },
+            { id: 2, name: 'Харків', code: 'kharkiv', center_lat: 49.992599, center_lng: 36.231078, zoom_level: 10 },
+            { id: 3, name: 'Львів', code: 'lviv', center_lat: 49.839683, center_lng: 24.029717, zoom_level: 10 },
+            { id: 4, name: 'Одеса', code: 'odesa', center_lat: 46.482526, center_lng: 30.723310, zoom_level: 10 },
+            { id: 5, name: 'Дніпро', code: 'dnipro', center_lat: 48.464700, center_lng: 35.046200, zoom_level: 10 },
+            { id: 6, name: 'Запоріжжя', code: 'zaporizhia', center_lat: 47.838800, center_lng: 35.139600, zoom_level: 10 },
+            { id: 7, name: 'Вінниця', code: 'vinnytsia', center_lat: 49.232800, center_lng: 28.480970, zoom_level: 10 },
+            { id: 8, name: 'Черкаси', code: 'cherkasy', center_lat: 49.444430, center_lng: 32.059770, zoom_level: 10 },
+            { id: 9, name: 'Полтава', code: 'poltava', center_lat: 49.588270, center_lng: 34.551420, zoom_level: 10 },
+            { id: 10, name: 'Чернігів', code: 'chernihiv', center_lat: 51.498200, center_lng: 31.289350, zoom_level: 10 },
+            { id: 11, name: 'Суми', code: 'sumy', center_lat: 50.907700, center_lng: 34.798100, zoom_level: 10 },
+            { id: 12, name: 'Житомир', code: 'zhytomyr', center_lat: 50.254650, center_lng: 28.658670, zoom_level: 10 },
+            { id: 13, name: 'Ужгород', code: 'uzhhorod', center_lat: 48.620800, center_lng: 22.287880, zoom_level: 10 },
+            { id: 14, name: 'Чернівці', code: 'chernivtsi', center_lat: 48.291490, center_lng: 25.935840, zoom_level: 10 },
+            { id: 15, name: 'Тернопіль', code: 'ternopil', center_lat: 49.553520, center_lng: 25.594767, zoom_level: 10 },
+            { id: 16, name: 'Хмельницький', code: 'khmelnytskyi', center_lat: 49.421630, center_lng: 26.996530, zoom_level: 10 },
+            { id: 17, name: 'Івано-Франківськ', code: 'ivano-frankivsk', center_lat: 48.922630, center_lng: 24.711110, zoom_level: 10 },
+            { id: 18, name: 'Луцьк', code: 'lutsk', center_lat: 50.747230, center_lng: 25.325380, zoom_level: 10 },
+            { id: 19, name: 'Рівне', code: 'rivne', center_lat: 50.619900, center_lng: 26.251600, zoom_level: 10 },
+            { id: 20, name: 'Миколаїв', code: 'mykolaiv', center_lat: 46.975870, center_lng: 31.994580, zoom_level: 10 },
+            { id: 21, name: 'Херсон', code: 'kherson', center_lat: 46.635420, center_lng: 32.616870, zoom_level: 10 },
+            { id: 22, name: 'Кропивницький', code: 'kirovohrad', center_lat: 48.507933, center_lng: 32.262317, zoom_level: 10 },
+            { id: 23, name: 'Сєвєродонецьк', code: 'severodonetsk', center_lat: 48.948230, center_lng: 38.486050, zoom_level: 10 },
+            { id: 24, name: 'Донецьк', code: 'donetsk', center_lat: 48.015880, center_lng: 37.802850, zoom_level: 10 },
+            { id: 25, name: 'Луганськ', code: 'luhansk', center_lat: 48.574041, center_lng: 39.307815, zoom_level: 10 },
+            { id: 26, name: 'Сімферополь', code: 'simferopol', center_lat: 44.952117, center_lng: 34.102417, zoom_level: 10 }
+        ];
+        
+        console.log('Завантажено регіонів:', regions.length);
+        
+        // Заповнюємо випадаючий список фільтра регіонів
+        const regionFilter = document.getElementById('filterRegion');
+        if (regionFilter) {
+            // Зберігаємо опцію "Всі регіони"
+            const allOption = regionFilter.querySelector('option[value="all"]');
+            regionFilter.innerHTML = '';
+            regionFilter.appendChild(allOption);
+            
+            // Додаємо всі регіони
+            regions.forEach(region => {
+                const option = document.createElement('option');
+                option.value = region.id;
+                option.textContent = region.name;
+                regionFilter.appendChild(option);
+            });
+        }
+        
+        // Додаємо обробник події для фільтрації по регіону
+        const filterButton = document.getElementById('applyFilter');
+        if (filterButton) {
+            filterButton.addEventListener('click', filterMarkersByRegion);
+        } else {
+            // Якщо немає кнопки фільтра, додаємо обробник безпосередньо до випадаючого списку
+            if (regionFilter) {
+                regionFilter.addEventListener('change', filterMarkersByRegion);
+            }
+        }
+        
+    } catch (error) {
+        console.error('Помилка завантаження регіонів:', error);
+    }
+}
+
+// Функция для отображения списка объектов
+function renderObjects(objects) {
+    const objectsList = document.getElementById('objectsList');
+    if (!objectsList) return;
+    
+    // Очищаем текущий список
+    objectsList.innerHTML = '';
+    
+    // Получаем выбранный фильтр статуса
+    const statusFilter = document.getElementById('filterStatus').value;
+    
+    // Получаем выбранный фильтр региона
+    const regionFilter = document.getElementById('filterRegion').value;
+    
+    // Создаем отфильтрованный список объектов
+    let filteredObjects = objects || explosiveObjects;
+    
+    // Применяем фильтр по статусу
+    if (statusFilter !== 'all') {
+        filteredObjects = filteredObjects.filter(obj => obj.status === statusFilter);
+    }
+    
+    // Применяем фильтр по региону
+    if (regionFilter !== 'all') {
+        filteredObjects = filteredObjects.filter(obj => obj.region_id.toString() === regionFilter);
+    }
+    
+    // Сортируем объекты по дате (самые новые вверху)
+    filteredObjects.sort((a, b) => new Date(b.reported_at) - new Date(a.reported_at));
+    
+    // Если список пуст, показываем сообщение
+    if (filteredObjects.length === 0) {
+        objectsList.innerHTML = '<div class="alert alert-info">Немає об\'єктів для відображення.</div>';
+        return;
+    }
+    
+    // Функция для получения HTML класса статуса
+    function getStatusClass(status) {
+        switch(status) {
+            case 'mined': return 'bg-danger';
+            case 'unconfirmed': return 'bg-warning text-dark';
+            case 'demined': return 'bg-success';
+            case 'archived': return 'bg-secondary';
+            default: return 'bg-secondary';
+        }
+    }
+    
+    // Функция для получения текста статуса
+    function getStatusText(status) {
+        switch(status) {
+            case 'mined': return 'Замінована';
+            case 'unconfirmed': return 'Непідтверджена';
+            case 'demined': return 'Розмінована';
+            case 'archived': return 'Архів';
+            default: return 'Невідомо';
+        }
+    }
+    
+    // Функция для получения класса приоритета
+    function getPriorityClass(priority) {
+        switch(priority) {
+            case 'high': return 'priority-high';
+            case 'medium': return 'priority-medium';
+            case 'low': return 'priority-low';
+            default: return 'priority-medium';
+        }
+    }
+    
+    // Функция для получения текста приоритета
+    function getPriorityText(priority) {
+        switch(priority) {
+            case 'high': return 'Високий';
+            case 'medium': return 'Середній';
+            case 'low': return 'Низький';
+            default: return 'Середній';
+        }
+    }
+    
+    // Отображаем только первые 20 объектов для производительности
+    const maxObjects = 20;
+    const objectsToShow = filteredObjects.slice(0, maxObjects);
+    
+    // Добавляем каждый объект в список
+    objectsToShow.forEach(obj => {
+        const itemElement = document.createElement('div');
+        itemElement.className = 'object-item';
+        itemElement.dataset.objectId = obj.id;
+        
+        // Форматируем дату
+        const reportedDate = new Date(obj.reported_at);
+        const formattedDate = reportedDate.toLocaleDateString('uk-UA');
+        
+        // Создаем HTML для элемента списка
+        itemElement.innerHTML = `
+            <div>
+                <strong>${obj.title}</strong>
+                <span class="badge ${getStatusClass(obj.status)} ms-2">${getStatusText(obj.status)}</span>
+            </div>
+            <div class="object-info">
+                <span>${obj.region_name}</span>
+                <span class="${getPriorityClass(obj.priority)}">${getPriorityText(obj.priority)}</span>
+            </div>
+            <div class="small text-muted">${formattedDate}</div>
+        `;
+        
+        // Добавляем обработчик клика для перехода к объекту
+        itemElement.addEventListener('click', () => {
+            // Переходим к объекту на карте
+            map.setCenter({lat: obj.latitude, lng: obj.longitude});
+            map.setZoom(15);
+            
+            // Находим маркер и открываем его инфо-окно
+            const marker = markers.find(m => {
+                try {
+                    // Проверяем, имеет ли маркер свойство position
+                    if (m.position) {
+                        return m.position.lat() === obj.latitude && m.position.lng() === obj.longitude;
+                    } else if (m.position_) {
+                        return m.position_.lat === obj.latitude && m.position_.lng === obj.longitude;
+                    }
+                } catch (e) {
+                    return false;
+                }
+                return false;
+            });
+            
+            if (marker) {
+                // Эмулируем клик по маркеру
+                google.maps.event.trigger(marker, 'click');
+            }
+        });
+        
+        // Добавляем элемент в список
+        objectsList.appendChild(itemElement);
+    });
+    
+    // Если есть еще объекты, показываем сообщение
+    if (filteredObjects.length > maxObjects) {
+        const moreItems = document.createElement('div');
+        moreItems.className = 'text-center mt-2';
+        moreItems.innerHTML = `<small class="text-muted">+ ще ${filteredObjects.length - maxObjects} об'єктів</small>`;
+        objectsList.appendChild(moreItems);
+    }
+}
+
+// Добавляем обработчик изменения фильтра
+document.addEventListener('DOMContentLoaded', () => {
+    const filterStatus = document.getElementById('filterStatus');
+    if (filterStatus) {
+        filterStatus.addEventListener('change', () => {
+            renderObjects();
+        });
+    }
+});
 
 // Функция вызывается при открытии модального окна "Сообщить об опасности"
 function onReportModalShow() {
@@ -208,13 +436,16 @@ function startPhotoCountdown() {
     // Деактивируем кнопку фото во время отсчета
     document.getElementById('takePhoto').disabled = true;
     
+    // Сохраняем текущие координаты GPS для проверки стабильности
+    const currentPositions = [...gpsPositions];
+    
     // Запускаем интервал для отсчета
     const countdownInterval = setInterval(() => {
         photoCountdown--;
         countdownElement.textContent = photoCountdown;
         
-        // Если позиция изменилась значительно, прерываем отсчет
-        if (!locationStable) {
+        // Проверяем, не переместился ли пользователь во время отсчета
+        if (!locationStable || hasLocationChanged(currentPositions, gpsPositions)) {
             clearInterval(countdownInterval);
             countdownElement.style.display = 'none';
             document.getElementById('takePhoto').disabled = false;
@@ -229,6 +460,23 @@ function startPhotoCountdown() {
             takePhoto();
         }
     }, 1000);
+}
+
+// Функция для проверки, изменилось ли местоположение пользователя
+function hasLocationChanged(oldPositions, newPositions) {
+    if (oldPositions.length < 2 || newPositions.length < 2) return false;
+    
+    // Берем последние позиции
+    const oldLat = oldPositions[oldPositions.length - 1].latitude;
+    const oldLng = oldPositions[oldPositions.length - 1].longitude;
+    const newLat = newPositions[newPositions.length - 1].latitude;
+    const newLng = newPositions[newPositions.length - 1].longitude;
+    
+    // Рассчитываем расстояние между позициями
+    const distance = calculateDistance(oldLat, oldLng, newLat, newLng);
+    
+    // Если расстояние больше 5 метров, считаем что местоположение изменилось
+    return distance > 5;
 }
 
 // Функция для создания фото
@@ -470,6 +718,11 @@ async function submitReport() {
     };
     
     try {
+        // Показываем индикатор загрузки
+        const submitButton = document.getElementById('submitReport');
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Відправка...';
+        
         // Отправляем данные на сервер
         const response = await fetch('/api/report-danger', {
             method: 'POST',
@@ -493,6 +746,9 @@ async function submitReport() {
             // Останавливаем камеру и GPS
             stopCamera();
             stopGpsTracking();
+            
+            // Перезагружаем объекты на карте
+            await loadExplosiveObjects();
         } else {
             // Если сервер вернул ошибку
             const errorData = await response.json();
@@ -501,6 +757,11 @@ async function submitReport() {
     } catch (error) {
         console.error('Ошибка при отправке сообщения:', error);
         alert('Не удалось отправить сообщение: ' + error.message);
+    } finally {
+        // Восстанавливаем кнопку
+        const submitButton = document.getElementById('submitReport');
+        submitButton.disabled = false;
+        submitButton.innerHTML = 'Відправити повідомлення';
     }
 }
 
@@ -560,8 +821,6 @@ async function addMarkersToMap() {
                 markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png" };
             } else if (obj.status === 'unconfirmed') {
                 markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png" };
-            } else if (obj.status === 'secret') {
-                markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/purple-dot.png" };
             } else if (obj.status === 'archived') {
                 markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png" };
             }
@@ -595,8 +854,6 @@ async function addMarkersToMap() {
                         markerContent.style.backgroundColor = '#4CAF50'; // зеленый
                     } else if (obj.status === 'unconfirmed') {
                         markerContent.style.backgroundColor = '#FFC107'; // желтый
-                    } else if (obj.status === 'secret') {
-                        markerContent.style.backgroundColor = '#9C27B0'; // фиолетовый
                     } else if (obj.status === 'archived') {
                         markerContent.style.backgroundColor = '#607D8B'; // серый/синий
                     }
@@ -625,7 +882,7 @@ async function addMarkersToMap() {
             // Проверяем, принадлежит ли объект текущему пользователю
             const isMyObject = currentUser && obj.reported_by === currentUser.id;
             
-            // Проверяем наличие фото и формируем HTML для его отображения
+            // Получаем HTML для отображения фото
             let photoHtml = '';
             if (obj.photo_url) {
                 photoHtml = `
@@ -835,14 +1092,10 @@ function getStatusText(status) {
 
 function getPriorityText(priority) {
     switch (priority) {
-        case 'high':
-            return 'Високий';
-        case 'medium':
-            return 'Середній';
-        case 'low':
-            return 'Низький';
-        default:
-            return 'Невідомо';
+        case 'high': return 'Високий';
+        case 'medium': return 'Середній';
+        case 'low': return 'Низький';
+        default: return 'Невідомо';
     }
 }
 
@@ -1143,4 +1396,40 @@ function formatDate(dateString) {
     if (!dateString) return '';
     const date = new Date(dateString);
     return date.toLocaleString('uk-UA');
+}
+
+// Функция для фильтрации маркеров по региону
+function filterMarkersByRegion() {
+    const regionFilter = document.getElementById('filterRegion');
+    if (!regionFilter) return;
+    
+    const selectedRegionId = regionFilter.value;
+    
+    // Clear existing markers
+    clearMarkers();
+    
+    // Get selected status and priority filters as well
+    const statusFilter = document.getElementById('filterStatus');
+    const selectedStatus = statusFilter ? statusFilter.value : 'all';
+    
+    // Filter objects by region, status and priority
+    let filteredObjects = [...explosiveObjects];
+    
+    // Filter by region if specific region is selected
+    if (selectedRegionId !== 'all') {
+        filteredObjects = filteredObjects.filter(obj => obj.region_id.toString() === selectedRegionId);
+    }
+    
+    // Filter by status if specific status is selected
+    if (selectedStatus !== 'all') {
+        filteredObjects = filteredObjects.filter(obj => obj.status === selectedStatus);
+    }
+    
+    // Add filtered markers to the map
+    filteredObjects.forEach(obj => {
+        addMarker(obj);
+    });
+    
+    // Update the objects list with filtered objects
+    renderObjects(filteredObjects);
 }

@@ -173,6 +173,25 @@ async def map_page(request: Request):
         {"request": request, "google_maps_api_key": google_maps_api_key}
     )
 
+# Mined territories map page
+@app.get("/mined-territories", response_class=HTMLResponse)
+async def mined_territories_page(request: Request):
+    google_maps_api_key = os.getenv("GOOGLE_MAPS_API_KEY", "")
+    # Передаємо current_user, якщо користувач авторизований
+    current_user = None
+    try:
+        token = request.cookies.get("access_token")
+        if token:
+            current_user = await get_current_user(token)
+    except Exception as e:
+        # Якщо виникла помилка авторизації, просто продовжуємо без current_user
+        pass
+        
+    return templates.TemplateResponse(
+        "mined_territories.html", 
+        {"request": request, "google_maps_api_key": google_maps_api_key, "current_user": current_user}
+    )
+
 # Token endpoint for authentication
 @app.post("/token")
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
@@ -417,19 +436,38 @@ async def get_regions():
     ]
 
 @app.get("/api/explosive-objects", response_model=List[ExplosiveObjectResponse])
-async def get_explosive_objects():
+async def get_explosive_objects(current_user: Optional[UserResponse] = Depends(get_current_user)):
     async with get_connection() as conn:
-        cursor = await conn.execute("""
+        # Base SQL query
+        base_query = """
             SELECT eo.*, r.name as region_name, u.username as reported_by_username
             FROM explosive_objects eo
             JOIN regions r ON eo.region_id = r.id
             JOIN users u ON eo.reported_by = u.id
-            ORDER BY eo.reported_at DESC
-        """)
+        """
+        
+        # Apply role-based filtering
+        where_clause = ""
+        if current_user:
+            if current_user.role == "citizen":
+                # Citizens can only see active, unconfirmed, and cleared markers (not archived or secret)
+                where_clause = " WHERE eo.status NOT IN ('archived', 'secret')"
+            elif current_user.role == "sapper":
+                # Sappers can see everything except archived
+                where_clause = " WHERE eo.status != 'archived'"
+            # Admins and moderators see everything (no filter)
+        
+        # Complete query
+        query = base_query + where_clause + " ORDER BY eo.reported_at DESC"
+        
+        cursor = await conn.execute(query)
         objects = await cursor.fetchall()
     
-    return [
-        ExplosiveObjectResponse(
+    # Convert DB objects to API response
+    result = []
+    for obj in objects:
+        # Get all standard fields
+        response_obj = ExplosiveObjectResponse(
             id=obj["id"],
             title=obj["title"],
             description=obj["description"],
@@ -444,70 +482,126 @@ async def get_explosive_objects():
             photo_url=obj["photo_url"] if "photo_url" in obj else None,
             reported_at=obj["reported_at"],
             updated_at=obj["updated_at"]
-        ) for obj in objects
-    ]
+        )
+        
+        # Add optional fields if they exist in the database
+        if "area_size" in obj and obj["area_size"]:
+            response_obj.area_size = obj["area_size"]
+        
+        if "danger_level" in obj and obj["danger_level"]:
+            response_obj.danger_level = obj["danger_level"]
+            
+        if "is_cluster" in obj and obj["is_cluster"]:
+            response_obj.is_cluster = obj["is_cluster"]
+            
+        result.append(response_obj)
+    
+    return result
 
 @app.post("/api/explosive-objects", response_model=ExplosiveObjectResponse)
 async def create_explosive_object(
     object_data: ExplosiveObjectCreate,
     current_user: UserResponse = Depends(get_current_user)
 ):
-    async with get_connection() as conn:
-        # Check if region exists
-        cursor = await conn.execute("SELECT id FROM regions WHERE id = ?", (object_data.region_id,))
-        region = await cursor.fetchone()
-        if not region:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Region not found"
-            )
+    try:
+        print(f"Received request to create explosive object: {object_data.dict()}")
+        print(f"From user: {current_user.username} (ID: {current_user.id}, Role: {current_user.role})")
         
-        # Create new object
-        await conn.execute(
-            """
-            INSERT INTO explosive_objects 
-            (title, description, latitude, longitude, status, priority, region_id, reported_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (object_data.title, object_data.description, object_data.latitude, 
-            object_data.longitude, object_data.status, object_data.priority, 
-            object_data.region_id, current_user.id)
-        )
-        await conn.commit()
-        
-        # Get created object ID (last inserted row id)
-        cursor = await conn.execute("SELECT last_insert_rowid()")
-        object_id = await cursor.fetchone()
-        object_id = object_id[0]
-        
-        # Get created object
-        cursor = await conn.execute(
-            """
-            SELECT eo.*, r.name as region_name, u.username as reported_by_username
-            FROM explosive_objects eo
-            JOIN regions r ON eo.region_id = r.id
-            JOIN users u ON eo.reported_by = u.id
-            WHERE eo.id = ?
-            """,
-            (object_id,)
-        )
-        created_object = await cursor.fetchone()
-        
-        return ExplosiveObjectResponse(
-            id=created_object["id"],
-            title=created_object["title"],
-            description=created_object["description"],
-            latitude=created_object["latitude"],
-            longitude=created_object["longitude"],
-            status=created_object["status"],
-            priority=created_object["priority"],
-            region_id=created_object["region_id"],
-            region_name=created_object["region_name"],
-            reported_by=created_object["reported_by"],
-            reported_by_username=created_object["reported_by_username"],
-            photo_url=created_object["photo_url"] if "photo_url" in created_object else None,
-            reported_at=created_object["reported_at"],
-            updated_at=created_object["updated_at"]
+        async with get_connection() as conn:
+            # Check if region exists
+            cursor = await conn.execute("SELECT id FROM regions WHERE id = ?", (object_data.region_id,))
+            region = await cursor.fetchone()
+            if not region:
+                print(f"Region not found: {object_data.region_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Region with ID {object_data.region_id} not found"
+                )
+            
+            # Create new object
+            print(f"Creating new explosive object in database")
+            try:
+                await conn.execute(
+                    """
+                    INSERT INTO explosive_objects 
+                    (title, description, latitude, longitude, status, priority, region_id, reported_by)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (object_data.title, object_data.description, object_data.latitude, 
+                    object_data.longitude, object_data.status, object_data.priority, 
+                    object_data.region_id, current_user.id)
+                )
+                await conn.commit()
+                
+                # Get created object ID (last inserted row id)
+                cursor = await conn.execute("SELECT last_insert_rowid()")
+                object_id = await cursor.fetchone()
+                object_id = object_id[0]
+                print(f"Created object with ID: {object_id}")
+                
+                # Get created object
+                cursor = await conn.execute(
+                    """
+                    SELECT eo.*, r.name as region_name, u.username as reported_by_username
+                    FROM explosive_objects eo
+                    JOIN regions r ON eo.region_id = r.id
+                    JOIN users u ON eo.reported_by = u.id
+                    WHERE eo.id = ?
+                    """,
+                    (object_id,)
+                )
+                created_object = await cursor.fetchone()
+                
+                if not created_object:
+                    print(f"Error: Created object with ID {object_id} not found after creation")
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=f"Object was created but could not be retrieved"
+                    )
+                
+                print(f"Successfully retrieved created object: {dict(created_object)}")
+                
+                # Create response object with all fields
+                response_obj = ExplosiveObjectResponse(
+                    id=created_object["id"],
+                    title=created_object["title"],
+                    description=created_object["description"],
+                    latitude=created_object["latitude"],
+                    longitude=created_object["longitude"],
+                    status=created_object["status"],
+                    priority=created_object["priority"],
+                    region_id=created_object["region_id"],
+                    region_name=created_object["region_name"],
+                    reported_by=created_object["reported_by"],
+                    reported_by_username=created_object["reported_by_username"],
+                    photo_url=created_object["photo_url"] if "photo_url" in created_object else None,
+                    reported_at=created_object["reported_at"],
+                    updated_at=created_object["updated_at"]
+                )
+                
+                # Add optional fields if they were created
+                # No optional fields to add now
+                
+                print(f"Returning successful response: {response_obj.dict()}")
+                return response_obj
+                
+            except Exception as db_error:
+                print(f"Database error: {str(db_error)}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Database error: {str(db_error)}"
+                )
+                
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        print(f"Unexpected error in create_explosive_object: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unexpected error: {str(e)}"
         )
 
 # Admin map page

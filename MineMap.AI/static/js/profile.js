@@ -229,58 +229,94 @@ function updateApiKeysUI() {
 // Настройка обработчиков событий
 function setupEventListeners() {
     // Форма личных данных
-    document.getElementById('personalDataForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        updatePersonalData();
-    });
+    const personalDataForm = document.getElementById('personalDataForm');
+    if (personalDataForm) {
+        personalDataForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            updatePersonalData();
+        });
+    }
     
     // Форма смены пароля
-    document.getElementById('changePasswordForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        changePassword();
-    });
+    const changePasswordForm = document.getElementById('changePasswordForm');
+    if (changePasswordForm) {
+        changePasswordForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            changePassword();
+        });
+    }
     
     // Форма настроек уведомлений
-    document.getElementById('notificationsForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        saveNotificationSettings();
-    });
+    const notificationsForm = document.getElementById('notificationsForm');
+    if (notificationsForm) {
+        notificationsForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            saveNotificationSettings();
+        });
+    }
     
     // Двухфакторная аутентификация
-    document.getElementById('enable2FA').addEventListener('change', function() {
-        if (this.checked) {
-            setupTwoFactor();
-        } else {
-            disableTwoFactor();
-        }
-    });
+    const enable2FA = document.getElementById('enable2FA');
+    if (enable2FA) {
+        enable2FA.addEventListener('change', function() {
+            if (this.checked) {
+                setupTwoFactor();
+            } else {
+                disableTwoFactor();
+            }
+        });
+    }
     
     // Подтверждение двухфакторной аутентификации
-    document.getElementById('verifyTwoFactorBtn').addEventListener('click', verifyTwoFactor);
+    const verifyTwoFactorBtn = document.getElementById('verifyTwoFactorBtn');
+    if (verifyTwoFactorBtn) {
+        verifyTwoFactorBtn.addEventListener('click', verifyTwoFactor);
+    }
     
     // Отключение двухфакторной аутентификации
-    document.getElementById('disable2FABtn').addEventListener('click', disableTwoFactor);
+    const disable2FABtn = document.getElementById('disable2FABtn');
+    if (disable2FABtn) {
+        disable2FABtn.addEventListener('click', disableTwoFactor);
+    }
     
     // Удаление аккаунта
-    document.getElementById('confirmDeleteAccount').addEventListener('click', deleteAccount);
+    const confirmDeleteAccount = document.getElementById('confirmDeleteAccount');
+    if (confirmDeleteAccount) {
+        confirmDeleteAccount.addEventListener('click', deleteAccount);
+    }
     
     // Создание API ключа
-    document.getElementById('generateApiKeyBtn').addEventListener('click', function() {
-        const modal = new bootstrap.Modal(document.getElementById('generateApiKeyModal'));
-        modal.show();
-    });
+    const generateApiKeyBtn = document.getElementById('generateApiKeyBtn');
+    if (generateApiKeyBtn) {
+        generateApiKeyBtn.addEventListener('click', function() {
+            const modal = new bootstrap.Modal(document.getElementById('generateApiKeyModal'));
+            modal.show();
+        });
+    }
     
     // Подтверждение создания API ключа
-    document.getElementById('confirmGenerateApiKey').addEventListener('click', generateApiKey);
+    const confirmGenerateApiKey = document.getElementById('confirmGenerateApiKey');
+    if (confirmGenerateApiKey) {
+        confirmGenerateApiKey.addEventListener('click', generateApiKey);
+    }
     
     // Верификация email
-    document.getElementById('verifyEmailBtn').addEventListener('click', verifyEmail);
+    const verifyEmailBtn = document.getElementById('verifyEmailBtn');
+    if (verifyEmailBtn) {
+        verifyEmailBtn.addEventListener('click', verifyEmail);
+    }
     
     // Верификация телефона
-    document.getElementById('verifyPhoneBtn').addEventListener('click', verifyPhone);
+    const verifyPhoneBtn = document.getElementById('verifyPhoneBtn');
+    if (verifyPhoneBtn) {
+        verifyPhoneBtn.addEventListener('click', verifyPhone);
+    }
     
     // Начать чат поддержки
-    document.getElementById('startChatBtn').addEventListener('click', startSupportChat);
+    const startChatBtn = document.getElementById('startChatBtn');
+    if (startChatBtn) {
+        startChatBtn.addEventListener('click', startSupportChat);
+    }
 }
 
 // Функция для обновления личных данных
@@ -392,6 +428,11 @@ function initPasswordStrengthMeter() {
     const strengthBar = document.getElementById('passwordStrength');
     const feedback = document.getElementById('passwordFeedback');
     const confirmFeedback = document.getElementById('confirmFeedback');
+    
+    if (!passwordInput || !confirmInput || !strengthBar || !feedback || !confirmFeedback) {
+        console.log('Некоторые элементы для проверки пароля не найдены');
+        return;
+    }
     
     passwordInput.addEventListener('input', function() {
         const strength = calculatePasswordStrength(this.value);
