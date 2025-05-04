@@ -33,7 +33,8 @@ async function initMap() {
             zoom: 6,
             center: center,
             mapTypeId: google.maps.MapTypeId.ROADMAP,
-            streetViewControl: false
+            streetViewControl: false,
+            fullscreenControl: false
         });
         
         console.log('Карта инициализирована успешно');
@@ -45,42 +46,14 @@ async function initMap() {
         document.getElementById('applyFilters')?.addEventListener('click', applyFilters);
         document.getElementById('resetFilters')?.addEventListener('click', resetFilters);
         
-        // Обработчик для сохранения объекта
-        document.getElementById('saveObject')?.addEventListener('click', saveObject);
-        
-        // Обработчик для экспорта данных
-        document.getElementById('exportData')?.addEventListener('click', exportData);
-        
-        // Обработчик для удаления объекта
-        document.getElementById('deleteObject')?.addEventListener('click', deleteObjectConfirm);
-        
         // Загружаем регионы
         await loadRegions();
         
         // Добавляем обработчики для модальных окон
         setupModalListeners();
-        
-        // Добавляем обработчик для клика по карте
-        map.addListener('click', (event) => {
-            // Получаем координаты места клика
-            const lat = event.latLng.lat();
-            const lng = event.latLng.lng();
-            
-            // Заполняем поля формы
-            document.getElementById('latitude').value = lat;
-            document.getElementById('longitude').value = lng;
-            
-            // Сбрасываем ID, если был выбран объект для редактирования
-            document.getElementById('saveObject').removeAttribute('data-id');
-            
-            // Сбрасываем заголовок и текст кнопки
-            document.getElementById('addObjectModalLabel').textContent = 'Додати новий об\'єкт';
-            document.getElementById('saveObject').textContent = 'Зберегти';
-            
-            // Открываем модальное окно
-            const modal = new bootstrap.Modal(document.getElementById('addObjectModal'));
-            modal.show();
-        });
+
+        // Настройка обработчика клика по карте
+        setupMapClickListener();
     } catch (error) {
         console.error('Ошибка при инициализации карты:', error);
         const mapElement = document.getElementById("map");
@@ -112,7 +85,7 @@ async function loadRegions() {
             { id: 14, name: 'Чернівці', code: 'chernivtsi', center_lat: 48.291490, center_lng: 25.935840, zoom_level: 10 },
             { id: 15, name: 'Тернопіль', code: 'ternopil', center_lat: 49.553520, center_lng: 25.594767, zoom_level: 10 },
             { id: 16, name: 'Хмельницький', code: 'khmelnytskyi', center_lat: 49.421630, center_lng: 26.996530, zoom_level: 10 },
-            { id: 17, name: 'Івано-Франківськ', code: 'ivano-frankivsk', center_lat: 48.922630, center_lng: 24.711110, zoom_level: 10 },
+            { id: 17, name: 'Івано-Франківськ', code: 'ivano-frankisk', center_lat: 48.922630, center_lng: 24.711110, zoom_level: 10 },
             { id: 18, name: 'Луцьк', code: 'lutsk', center_lat: 50.747230, center_lng: 25.325380, zoom_level: 10 },
             { id: 19, name: 'Рівне', code: 'rivne', center_lat: 50.619900, center_lng: 26.251600, zoom_level: 10 },
             { id: 20, name: 'Миколаїв', code: 'mykolaiv', center_lat: 46.975870, center_lng: 31.994580, zoom_level: 10 },
@@ -124,6 +97,11 @@ async function loadRegions() {
             { id: 26, name: 'Сімферополь', code: 'simferopol', center_lat: 44.952117, center_lng: 34.102417, zoom_level: 10 }
         ];
         console.log('Loaded regions:', regions.length);
+        
+        // Initialize the map utilities with our regions data
+        if (typeof initMapUtilities === 'function') {
+            initMapUtilities(regions);
+        }
         
         // Fill region filter dropdown in admin controls
         const filterRegionSelect = document.getElementById('filterRegion');
@@ -189,6 +167,11 @@ async function loadRegions() {
                 option.textContent = region.name;
                 regionSelect.appendChild(option);
             });
+        }
+        
+        // Set up auto region detection for coordinates
+        if (typeof setupAutoRegionDetection === 'function') {
+            setupAutoRegionDetection('latitude', 'longitude', 'region');
         }
     } catch (error) {
         console.error('Error loading regions:', error);
@@ -1304,3 +1287,75 @@ function filterMarkersByRegion() {
         }
     }
 }
+
+// Модифицируем обработчик для клика по карте
+function setupMapClickListener() {
+    if (map) {
+        // Добавляем обработчик для клика по карте
+        map.addListener('click', (event) => {
+            // Получаем координаты места клика
+            const lat = event.latLng.lat();
+            const lng = event.latLng.lng();
+            
+            // Заполняем поля формы
+            document.getElementById('latitude').value = lat;
+            document.getElementById('longitude').value = lng;
+            
+            // Автоматически определяем и устанавливаем регион
+            if (typeof findRegionByCoordinates === 'function') {
+                const region = findRegionByCoordinates(lat, lng);
+                if (region) {
+                    const regionSelect = document.getElementById('region');
+                    if (regionSelect) {
+                        regionSelect.value = region.id;
+                    }
+                }
+            }
+            
+            // Сбрасываем ID, если был выбран объект для редактирования
+            document.getElementById('saveObject').removeAttribute('data-id');
+            
+            // Сбрасываем заголовок и текст кнопки
+            document.getElementById('addObjectModalLabel').textContent = 'Додати новий об\'єкт';
+            document.getElementById('saveObject').textContent = 'Зберегти';
+            
+            // Открываем модальное окно
+            const modal = new bootstrap.Modal(document.getElementById('addObjectModal'));
+            modal.show();
+        });
+    }
+}
+
+// Заменяем наши функции использованием общих функций из map_utilities.js
+function setupCoordinateListeners() {
+    if (typeof setupAutoRegionDetection === 'function') {
+        setupAutoRegionDetection('latitude', 'longitude', 'region');
+    } else {
+        console.warn('Функция настройки автоопределения региона недоступна');
+    }
+}
+
+// Add toggle functionality for admin panel
+document.addEventListener('DOMContentLoaded', () => {
+    const togglePanelBtn = document.getElementById('togglePanelBtn');
+    const adminPanel = document.querySelector('.admin-controls');
+    
+    if (togglePanelBtn && adminPanel) {
+        togglePanelBtn.addEventListener('click', () => {
+            adminPanel.classList.toggle('collapsed');
+            
+            // Store the state in localStorage to persist across page reloads
+            const isCollapsed = adminPanel.classList.contains('collapsed');
+            localStorage.setItem('adminPanelCollapsed', isCollapsed);
+        });
+        
+        // Check if there's a saved state in localStorage
+        const savedState = localStorage.getItem('adminPanelCollapsed');
+        if (savedState === 'true') {
+            adminPanel.classList.add('collapsed');
+        }
+    }
+    
+    // Set up filter handlers
+    setupFilterHandlers();
+});

@@ -31,32 +31,53 @@ function initMap() {
   })
 
   // Add event listeners for map control buttons
-  document.getElementById("zoomIn").addEventListener("click", () => {
-    map.setZoom(map.getZoom() + 1)
-  })
+  const zoomInBtn = document.getElementById("zoomIn")
+  if (zoomInBtn) {
+    zoomInBtn.addEventListener("click", () => {
+      map.setZoom(map.getZoom() + 1)
+    })
+  }
 
-  document.getElementById("zoomOut").addEventListener("click", () => {
-    map.setZoom(map.getZoom() - 1)
-  })
+  const zoomOutBtn = document.getElementById("zoomOut")
+  if (zoomOutBtn) {
+    zoomOutBtn.addEventListener("click", () => {
+      map.setZoom(map.getZoom() - 1)
+    })
+  }
 
-  document.getElementById("layers").addEventListener("click", toggleLayers)
-  document.getElementById("route").addEventListener("click", calculateRoute)
+  const layersBtn = document.getElementById("layers")
+  if (layersBtn) {
+    layersBtn.addEventListener("click", toggleLayers)
+  }
+  const routeBtn = document.getElementById("route")
+  if (routeBtn) {
+    routeBtn.addEventListener("click", calculateRoute)
+  }
 
   // Add click event for adding objects at clicked location
-  map.addListener("click", (event) => {
-    const lat = event.latLng.lat()
-    const lng = event.latLng.lng()
+  const addObjectModal = document.getElementById("addObjectModal");
+  if (map && addObjectModal) {
+    map.addListener("click", (event) => {
+      const lat = event.latLng.lat()
+      const lng = event.latLng.lng()
 
-    // Set coordinates in the form
-    document.getElementById("latitude").value = lat
-    document.getElementById("longitude").value = lng
+      // Set coordinates in the form
+      const latitudeInput = document.getElementById("latitude");
+      const longitudeInput = document.getElementById("longitude");
+      
+      if (latitudeInput) latitudeInput.value = lat;
+      if (longitudeInput) longitudeInput.value = lng;
 
-    // Open modal
-    new bootstrap.Modal(document.getElementById("addObjectModal")).show()
-  })
+      // Open modal
+      new bootstrap.Modal(addObjectModal).show()
+    })
+  }
 
   // Add event listener for saving objects
-  document.getElementById("saveObject").addEventListener("click", saveObject)
+  const saveObjectBtn = document.getElementById("saveObject");
+  if (saveObjectBtn) {
+    saveObjectBtn.addEventListener("click", saveObject);
+  }
 }
 
 // Load regions from API

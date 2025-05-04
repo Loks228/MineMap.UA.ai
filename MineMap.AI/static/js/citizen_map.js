@@ -1,87 +1,26 @@
 // Глобальные переменные
-let map;
-let markers = [];
+// These variables are already defined in map.js, so we'll use them instead of redeclaring
+// let map;
+// let markers = [];
 let markerCluster = null;
 let explosiveObjects = [];
 let users = [];
-let regions = [];
+// regions is also defined in map.js
+// let regions = [];
 let googleMapsLoaded = true;
 let gpsWatchId = null;
-let gpsPositions = [];
 let cameraStream = null;
 let photoCountdown = 0;
-let locationStable = false;
+// locationStable is defined in danger_reporting.js
+// let locationStable = false;
 
 // Глобальная переменная для хранения информации о текущем пользователе
 let currentUser = null;
 
-// Инициализация карты Google Maps
-function initMap() {
-    try {
-        // Проверка доступности Google Maps API
-        if (typeof google === 'undefined') {
-            console.warn('Google Maps API не доступен');
-            return;
-        }
-        
-        googleMapsLoaded = true;
-        
-        // Получаем элемент карты
-        const mapElement = document.getElementById("map");
-        if (!mapElement) {
-            console.warn('Элемент карты не найден на странице');
-            return;
-        }
-        
-        // Центр Украины
-        const center = { lat: 49.0, lng: 31.0 };
-        
-        // Создаем карту
-        map = new google.maps.Map(mapElement, {
-            zoom: 6,
-            center: center,
-            mapTypeId: google.maps.MapTypeId.ROADMAP,
-            streetViewControl: false
-        });
-
-        // Добавляем обработчики событий для кнопок
-        document.getElementById('zoomIn').addEventListener('click', () => {
-            map.setZoom(map.getZoom() + 1);
-        });
-        
-        document.getElementById('zoomOut').addEventListener('click', () => {
-            map.setZoom(map.getZoom() - 1);
-        });
-
-        // Обработчик кнопки сообщения об опасности
-        const reportBtn = document.getElementById('reportModal');
-        if (reportBtn) {
-            reportBtn.addEventListener('show.bs.modal', onReportModalShow);
-        }
-
-        // Обработчик кнопки отправки сообщения
-        const submitReportBtn = document.getElementById('submitReport');
-        if (submitReportBtn) {
-            submitReportBtn.addEventListener('click', submitReport);
-        }
-        
-        console.log('Карта инициализирована успешно');
-
-        // Загружаем данные о взрывоопасных объектах
-        loadExplosiveObjects();
-
-        // Получаем текущего пользователя
-        getCurrentUser();
-        
-    } catch (error) {
-        console.error('Ошибка при инициализации карты:', error);
-        const mapElement = document.getElementById("map");
-        if (mapElement) {
-            mapElement.innerHTML = '<div class="alert alert-danger">Ошибка при инициализации карты: ' + error.message + '</div>';
-            mapElement.style.height = 'auto';
-        }
-    }
-}
+// Инициализация карты Google Maps - we won't redefine this function as it's in map.js
+// function initMap() {
+// ... existing code ...
+// }
 
 // Функция для получения информации о текущем пользователе
 async function getCurrentUser() {
@@ -154,6 +93,11 @@ async function loadRegions() {
         
         console.log('Завантажено регіонів:', regions.length);
         
+        // Initialize the map utilities with our regions data
+        if (typeof initMapUtilities === 'function') {
+            initMapUtilities(regions);
+        }
+        
         // Заповнюємо випадаючий список фільтра регіонів
         const regionFilter = document.getElementById('filterRegion');
         if (regionFilter) {
@@ -169,6 +113,43 @@ async function loadRegions() {
                 option.textContent = region.name;
                 regionFilter.appendChild(option);
             });
+        }
+        
+        // Fill region filter in right panel
+        const mapRegionFilter = document.getElementById('regionFilter');
+        if (mapRegionFilter) {
+            // Keep "All regions" option
+            const allOption = mapRegionFilter.querySelector('option[value="all"]');
+            mapRegionFilter.innerHTML = '';
+            mapRegionFilter.appendChild(allOption);
+            
+            // Add all regions
+            regions.forEach(region => {
+                const option = document.createElement('option');
+                option.value = region.id;
+                option.textContent = region.name;
+                mapRegionFilter.appendChild(option);
+            });
+            
+            // Add event listener for filtering
+            mapRegionFilter.addEventListener('change', filterMapMarkersByRegion);
+        }
+        
+        // Fill region select in form
+        const regionSelect = document.getElementById('region');
+        if (regionSelect) {
+            regionSelect.innerHTML = '';
+            regions.forEach(region => {
+                const option = document.createElement('option');
+                option.value = region.id;
+                option.textContent = region.name;
+                regionSelect.appendChild(option);
+            });
+        }
+        
+        // Set up auto-detection of regions
+        if (typeof setupAutoRegionDetection === 'function') {
+            setupAutoRegionDetection('latitude', 'longitude', 'region');
         }
         
         // Додаємо обробник події для фільтрації по регіону
@@ -201,6 +182,9 @@ function renderObjects(objects) {
     // Получаем выбранный фильтр региона
     const regionFilter = document.getElementById('filterRegion').value;
     
+    // Получаем выбранный фильтр приоритета
+    const priorityFilter = document.getElementById('filterPriority')?.value || 'all';
+    
     // Создаем отфильтрованный список объектов
     let filteredObjects = objects || explosiveObjects;
     
@@ -214,6 +198,11 @@ function renderObjects(objects) {
         filteredObjects = filteredObjects.filter(obj => obj.region_id.toString() === regionFilter);
     }
     
+    // Применяем фильтр по приоритету
+    if (priorityFilter !== 'all') {
+        filteredObjects = filteredObjects.filter(obj => obj.priority === priorityFilter);
+    }
+    
     // Сортируем объекты по дате (самые новые вверху)
     filteredObjects.sort((a, b) => new Date(b.reported_at) - new Date(a.reported_at));
     
@@ -223,53 +212,11 @@ function renderObjects(objects) {
         return;
     }
     
-    // Функция для получения HTML класса статуса
-    function getStatusClass(status) {
-        switch(status) {
-            case 'mined': return 'bg-danger';
-            case 'unconfirmed': return 'bg-warning text-dark';
-            case 'demined': return 'bg-success';
-            case 'archived': return 'bg-secondary';
-            default: return 'bg-secondary';
-        }
-    }
-    
-    // Функция для получения текста статуса
-    function getStatusText(status) {
-        switch(status) {
-            case 'mined': return 'Замінована';
-            case 'unconfirmed': return 'Непідтверджена';
-            case 'demined': return 'Розмінована';
-            case 'archived': return 'Архів';
-            default: return 'Невідомо';
-        }
-    }
-    
-    // Функция для получения класса приоритета
-    function getPriorityClass(priority) {
-        switch(priority) {
-            case 'high': return 'priority-high';
-            case 'medium': return 'priority-medium';
-            case 'low': return 'priority-low';
-            default: return 'priority-medium';
-        }
-    }
-    
-    // Функция для получения текста приоритета
-    function getPriorityText(priority) {
-        switch(priority) {
-            case 'high': return 'Високий';
-            case 'medium': return 'Середній';
-            case 'low': return 'Низький';
-            default: return 'Середній';
-        }
-    }
-    
-    // Отображаем только первые 20 объектов для производительности
-    const maxObjects = 20;
+    // Отображаем только первые 10 объектов для производительности
+    const maxObjects = 10;
     const objectsToShow = filteredObjects.slice(0, maxObjects);
     
-    // Добавляем каждый объект в список
+    // Добавляем каждый объект в список в формате как на изображении
     objectsToShow.forEach(obj => {
         const itemElement = document.createElement('div');
         itemElement.className = 'object-item';
@@ -279,15 +226,27 @@ function renderObjects(objects) {
         const reportedDate = new Date(obj.reported_at);
         const formattedDate = reportedDate.toLocaleDateString('uk-UA');
         
+        // Определяем HTML класс для приоритета
+        function getPriorityBadgeHTML(priority) {
+            switch(priority) {
+                case 'high': return '<span class="badge bg-danger">Високий</span>';
+                case 'medium': return '<span class="badge" style="background-color: #fd7e14;">Середній</span>';
+                case 'low': return '<span class="badge bg-success">Низький</span>';
+                default: return '<span class="badge bg-secondary">Невідомо</span>';
+            }
+        }
+        
+        // Создаем сокращенное представление для заголовка
+        const shortenedTitle = obj.title.length > 1 ? obj.title.substring(0, 1) : obj.title;
+        
         // Создаем HTML для элемента списка
         itemElement.innerHTML = `
             <div>
-                <strong>${obj.title}</strong>
-                <span class="badge ${getStatusClass(obj.status)} ms-2">${getStatusText(obj.status)}</span>
+                <strong>${shortenedTitle}</strong>
+                ${getPriorityBadgeHTML(obj.priority)}
             </div>
             <div class="object-info">
-                <span>${obj.region_name}</span>
-                <span class="${getPriorityClass(obj.priority)}">${getPriorityText(obj.priority)}</span>
+                <span>${obj.region_name || "Регіон не вказаний"}</span>
             </div>
             <div class="small text-muted">${formattedDate}</div>
         `;
@@ -301,7 +260,6 @@ function renderObjects(objects) {
             // Находим маркер и открываем его инфо-окно
             const marker = markers.find(m => {
                 try {
-                    // Проверяем, имеет ли маркер свойство position
                     if (m.position) {
                         return m.position.lat() === obj.latitude && m.position.lng() === obj.longitude;
                     } else if (m.position_) {
@@ -314,7 +272,6 @@ function renderObjects(objects) {
             });
             
             if (marker) {
-                // Эмулируем клик по маркеру
                 google.maps.event.trigger(marker, 'click');
             }
         });
@@ -332,462 +289,76 @@ function renderObjects(objects) {
     }
 }
 
-// Добавляем обработчик изменения фильтра
+// Initialize UI and event listeners
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize filter status change handler
     const filterStatus = document.getElementById('filterStatus');
     if (filterStatus) {
         filterStatus.addEventListener('change', () => {
-            renderObjects();
+            // We'll now use the apply filters button instead of auto-filtering
+            // renderObjects();
         });
     }
-});
-
-// Функция вызывается при открытии модального окна "Сообщить об опасности"
-function onReportModalShow() {
-    // Находим или создаем элементы для камеры и GPS данных
-    let modalBody = document.querySelector('#reportModal .modal-body');
     
-    // Добавляем контейнер для камеры, если его еще нет
-    if (!document.getElementById('cameraContainer')) {
-        const cameraContainer = document.createElement('div');
-        cameraContainer.id = 'cameraContainer';
-        cameraContainer.className = 'mb-3';
-        cameraContainer.innerHTML = `
-            <label class="form-label">Фото ситуации</label>
-            <div class="camera-wrapper position-relative mb-2" style="width:100%; height:300px; background-color:#000;">
-                <video id="cameraPreview" style="width:100%; height:100%; object-fit:cover;" autoplay muted></video>
-                <canvas id="photoCanvas" style="display:none; width:100%; height:100%;"></canvas>
-                <div id="gpsStatus" class="position-absolute top-0 end-0 p-2 badge bg-warning">Получение GPS...</div>
-                <div id="photoCountdown" class="position-absolute top-50 start-50 translate-middle badge bg-danger fs-1" style="display:none;">10</div>
-            </div>
-            <div class="d-flex justify-content-between">
-                <button type="button" id="startCamera" class="btn btn-sm btn-primary">Включить камеру</button>
-                <button type="button" id="takePhoto" class="btn btn-sm btn-success" disabled>Сделать фото</button>
-                <button type="button" id="retakePhoto" class="btn btn-sm btn-secondary" style="display:none;">Переснять</button>
-            </div>
-            <input type="hidden" id="photoData" name="photoData">
-        `;
-        
-        // Вставляем контейнер в начало формы
-        const reportForm = document.getElementById('reportForm');
-        reportForm.insertBefore(cameraContainer, reportForm.firstChild);
-        
-        // Добавляем обработчики событий для новых кнопок
-        setTimeout(() => {
-            document.getElementById('startCamera').addEventListener('click', startCamera);
-            document.getElementById('takePhoto').addEventListener('click', startPhotoCountdown);
-            document.getElementById('retakePhoto').addEventListener('click', retakePhoto);
-        }, 100);
-    }
+    // Initialize toggle and restore buttons for object list panel
+    const toggleListBtn = document.getElementById('toggleListBtn');
+    const restoreListBtn = document.getElementById('restoreListBtn');
+    const objectList = document.querySelector('.object-list');
     
-    // Запускаем отслеживание GPS
-    startGpsTracking();
-}
-
-// Функция для запуска камеры
-async function startCamera() {
-    try {
-        // Проверяем поддержку камеры в браузере
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            alert('Ваш браузер не поддерживает доступ к камере');
-            return;
+    // Initially hide the restore button if the panel is not collapsed
+    if (restoreListBtn) {
+        const savedState = localStorage.getItem('objectListCollapsed');
+        if (savedState !== 'true') {
+            restoreListBtn.classList.add('d-none');
         }
-        
-        // Запрашиваем доступ к камере
-        cameraStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment' }, // Используем заднюю камеру на мобильных устройствах
-            audio: false
-        });
-        
-        // Отображаем превью камеры
-        const videoElement = document.getElementById('cameraPreview');
-        videoElement.srcObject = cameraStream;
-        videoElement.style.display = 'block';
-        
-        // Скрываем canvas с фото, если он был отображен
-        document.getElementById('photoCanvas').style.display = 'none';
-        
-        // Активируем кнопку фото и деактивируем кнопку запуска камеры
-        document.getElementById('takePhoto').disabled = false;
-        document.getElementById('startCamera').disabled = true;
-        document.getElementById('retakePhoto').style.display = 'none';
-        
-        console.log('Камера успешно запущена');
-    } catch (error) {
-        console.error('Ошибка при запуске камеры:', error);
-        alert('Не удалось получить доступ к камере: ' + error.message);
-    }
-}
-
-// Функция запуска отсчета для фото
-function startPhotoCountdown() {
-    // Проверяем, стабильна ли позиция GPS
-    if (!locationStable) {
-        alert('Дождитесь стабилизации GPS для точных координат (необходимо оставаться на месте)');
-        return;
     }
     
-    // Начинаем отсчет с 10 секунд
-    photoCountdown = 10;
-    const countdownElement = document.getElementById('photoCountdown');
-    countdownElement.textContent = photoCountdown;
-    countdownElement.style.display = 'block';
-    
-    // Деактивируем кнопку фото во время отсчета
-    document.getElementById('takePhoto').disabled = true;
-    
-    // Сохраняем текущие координаты GPS для проверки стабильности
-    const currentPositions = [...gpsPositions];
-    
-    // Запускаем интервал для отсчета
-    const countdownInterval = setInterval(() => {
-        photoCountdown--;
-        countdownElement.textContent = photoCountdown;
-        
-        // Проверяем, не переместился ли пользователь во время отсчета
-        if (!locationStable || hasLocationChanged(currentPositions, gpsPositions)) {
-            clearInterval(countdownInterval);
-            countdownElement.style.display = 'none';
-            document.getElementById('takePhoto').disabled = false;
-            alert('Вы двигаетесь. Оставайтесь на месте для получения точных координат.');
-            return;
-        }
-        
-        // Если отсчет завершен, делаем фото
-        if (photoCountdown <= 0) {
-            clearInterval(countdownInterval);
-            countdownElement.style.display = 'none';
-            takePhoto();
-        }
-    }, 1000);
-}
-
-// Функция для проверки, изменилось ли местоположение пользователя
-function hasLocationChanged(oldPositions, newPositions) {
-    if (oldPositions.length < 2 || newPositions.length < 2) return false;
-    
-    // Берем последние позиции
-    const oldLat = oldPositions[oldPositions.length - 1].latitude;
-    const oldLng = oldPositions[oldPositions.length - 1].longitude;
-    const newLat = newPositions[newPositions.length - 1].latitude;
-    const newLng = newPositions[newPositions.length - 1].longitude;
-    
-    // Рассчитываем расстояние между позициями
-    const distance = calculateDistance(oldLat, oldLng, newLat, newLng);
-    
-    // Если расстояние больше 5 метров, считаем что местоположение изменилось
-    return distance > 5;
-}
-
-// Функция для создания фото
-function takePhoto() {
-    if (!cameraStream) {
-        alert('Камера не активирована');
-        return;
-    }
-    
-    try {
-        // Получаем элементы видео и canvas
-        const videoElement = document.getElementById('cameraPreview');
-        const canvasElement = document.getElementById('photoCanvas');
-        const context = canvasElement.getContext('2d');
-        
-        // Устанавливаем размеры canvas равными размерам видео
-        canvasElement.width = videoElement.videoWidth;
-        canvasElement.height = videoElement.videoHeight;
-        
-        // Рисуем текущий кадр видео на canvas
-        context.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
-        
-        // Получаем данные фото в формате Base64
-        const photoData = canvasElement.toDataURL('image/jpeg');
-        
-        // Сохраняем данные фото в скрытое поле
-        document.getElementById('photoData').value = photoData;
-        
-        // Показываем canvas с фото и скрываем видео
-        videoElement.style.display = 'none';
-        canvasElement.style.display = 'block';
-        
-        // Останавливаем камеру
-        stopCamera();
-        
-        // Показываем кнопку "Переснять" и деактивируем кнопку "Сделать фото"
-        document.getElementById('retakePhoto').style.display = 'inline-block';
-        document.getElementById('takePhoto').disabled = true;
-        document.getElementById('startCamera').disabled = false;
-        
-        console.log('Фото успешно сделано');
-    } catch (error) {
-        console.error('Ошибка при создании фото:', error);
-        alert('Не удалось сделать фото: ' + error.message);
-    }
-}
-
-// Функция для повторного создания фото
-function retakePhoto() {
-    // Очищаем данные предыдущего фото
-    document.getElementById('photoData').value = '';
-    
-    // Запускаем камеру заново
-    startCamera();
-}
-
-// Функция для остановки камеры
-function stopCamera() {
-    if (cameraStream) {
-        // Останавливаем все треки камеры
-        cameraStream.getTracks().forEach(track => track.stop());
-        cameraStream = null;
-    }
-}
-
-// Функция для запуска отслеживания GPS
-function startGpsTracking() {
-    // Очищаем предыдущие данные
-    gpsPositions = [];
-    locationStable = false;
-    
-    // Проверяем поддержку геолокации в браузере
-    if (!navigator.geolocation) {
-        alert('Ваш браузер не поддерживает геолокацию');
-        return;
-    }
-    
-    // Обновляем интерфейс
-    const gpsStatus = document.getElementById('gpsStatus');
-    gpsStatus.textContent = 'Получение GPS...';
-    gpsStatus.className = 'position-absolute top-0 end-0 p-2 badge bg-warning';
-    
-    // Запускаем отслеживание позиции
-    gpsWatchId = navigator.geolocation.watchPosition(
-        // Успешное получение позиции
-        (position) => {
-            const { latitude, longitude, accuracy } = position.coords;
-            console.log(`GPS: ${latitude}, ${longitude} (точность: ${accuracy}м)`);
-            
-            // Добавляем новую позицию в массив
-            gpsPositions.push({ latitude, longitude, accuracy, timestamp: Date.now() });
-            
-            // Если у нас собрано более 5 позиций
-            if (gpsPositions.length > 5) {
-                // Удаляем самую старую позицию
-                gpsPositions.shift();
-                
-                // Проверяем стабильность позиции
-                checkPositionStability();
+    if (toggleListBtn && objectList) {
+        toggleListBtn.addEventListener('click', () => {
+            objectList.classList.add('collapsed');
+            if (restoreListBtn) {
+                restoreListBtn.classList.remove('d-none');
             }
             
-            // Обновляем поля формы
-            document.getElementById('latitude').value = latitude;
-            document.getElementById('longitude').value = longitude;
-        },
-        // Ошибка получения позиции
-        (error) => {
-            console.error('Ошибка GPS:', error);
-            gpsStatus.textContent = 'Ошибка GPS!';
-            gpsStatus.className = 'position-absolute top-0 end-0 p-2 badge bg-danger';
-            
-            switch (error.code) {
-                case error.PERMISSION_DENIED:
-                    alert('Вы запретили доступ к геолокации');
-                    break;
-                case error.POSITION_UNAVAILABLE:
-                    alert('Информация о позиции недоступна');
-                    break;
-                case error.TIMEOUT:
-                    alert('Истекло время ожидания получения позиции');
-                    break;
-                default:
-                    alert('Неизвестная ошибка геолокации');
-            }
-        },
-        // Опции геолокации
-        {
-            enableHighAccuracy: true, // Высокая точность
-            maximumAge: 0,           // Не использовать кэшированные данные
-            timeout: 10000           // Таймаут 10 секунд
-        }
-    );
-}
-
-// Функция для проверки стабильности позиции
-function checkPositionStability() {
-    // Берем последние 5 позиций
-    const recentPositions = gpsPositions.slice(-5);
-    
-    // Рассчитываем среднюю точность
-    const avgAccuracy = recentPositions.reduce((sum, pos) => sum + pos.accuracy, 0) / recentPositions.length;
-    
-    // Проверяем, не слишком ли большой разброс в координатах
-    let maxDistance = 0;
-    for (let i = 0; i < recentPositions.length - 1; i++) {
-        for (let j = i + 1; j < recentPositions.length; j++) {
-            const distance = calculateDistance(
-                recentPositions[i].latitude, recentPositions[i].longitude,
-                recentPositions[j].latitude, recentPositions[j].longitude
-            );
-            maxDistance = Math.max(maxDistance, distance);
-        }
-    }
-    
-    // Если максимальное расстояние меньше средней точности, считаем позицию стабильной
-    locationStable = maxDistance < avgAccuracy;
-    
-    // Обновляем интерфейс
-    const gpsStatus = document.getElementById('gpsStatus');
-    if (locationStable) {
-        gpsStatus.textContent = 'GPS стабилен';
-        gpsStatus.className = 'position-absolute top-0 end-0 p-2 badge bg-success';
-    } else {
-        gpsStatus.textContent = 'Стабилизация GPS...';
-        gpsStatus.className = 'position-absolute top-0 end-0 p-2 badge bg-warning';
-    }
-}
-
-// Функция для остановки отслеживания GPS
-function stopGpsTracking() {
-    if (gpsWatchId !== null) {
-        navigator.geolocation.clearWatch(gpsWatchId);
-        gpsWatchId = null;
-    }
-}
-
-// Функция для расчета расстояния между двумя точками (формула гаверсинуса)
-function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371000; // Радиус Земли в метрах
-    const dLat = toRadians(lat2 - lat1);
-    const dLon = toRadians(lon2 - lon1);
-    const a = 
-        Math.sin(dLat/2) * Math.sin(dLat/2) +
-        Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * 
-        Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c; // Расстояние в метрах
-}
-
-// Конвертация градусов в радианы
-function toRadians(degrees) {
-    return degrees * Math.PI / 180;
-}
-
-// Функция отправки сообщения об опасности
-async function submitReport() {
-    // Проверяем, получены ли координаты
-    const latitude = document.getElementById('latitude').value;
-    const longitude = document.getElementById('longitude').value;
-    
-    if (!latitude || !longitude) {
-        alert('Невозможно отправить сообщение без координат. Дождитесь получения GPS данных.');
-        return;
-    }
-    
-    if (!locationStable) {
-        alert('Локация не стабильна. Оставайтесь на месте для получения точных координат.');
-        return;
-    }
-    
-    // Проверяем, сделано ли фото
-    const photoData = document.getElementById('photoData').value;
-    if (!photoData) {
-        alert('Пожалуйста, сделайте фото опасной ситуации');
-        return;
-    }
-    
-    // Собираем данные формы
-    const title = document.getElementById('title').value;
-    const description = document.getElementById('description').value;
-    const regionId = document.getElementById('region').value;
-    
-    // Проверяем заполнение обязательных полей
-    if (!title || !regionId) {
-        alert('Пожалуйста, заполните все обязательные поля');
-        return;
-    }
-    
-    // Создаем объект с данными для отправки
-    const reportData = {
-        title,
-        description,
-        latitude: parseFloat(latitude),
-        longitude: parseFloat(longitude),
-        status: 'unconfirmed', // Статус по умолчанию - непроверено
-        priority: 'medium',    // Приоритет по умолчанию - средний
-        region_id: parseInt(regionId),
-        photo_data: photoData  // Данные фото в формате Base64
-    };
-    
-    try {
-        // Показываем индикатор загрузки
-        const submitButton = document.getElementById('submitReport');
-        submitButton.disabled = true;
-        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Відправка...';
-        
-        // Отправляем данные на сервер
-        const response = await fetch('/api/report-danger', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(reportData)
-        });
-        
-        if (response.ok) {
-            // Если запрос успешен, закрываем модальное окно и показываем сообщение
-            const modal = bootstrap.Modal.getInstance(document.getElementById('reportModal'));
-            modal.hide();
-            
-            alert('Сообщение об опасности успешно отправлено. Спасибо за вашу бдительность!');
-            
-            // Очищаем данные формы
-            document.getElementById('reportForm').reset();
-            document.getElementById('photoData').value = '';
-            
-            // Останавливаем камеру и GPS
-            stopCamera();
-            stopGpsTracking();
-            
-            // Перезагружаем объекты на карте
-            await loadExplosiveObjects();
-        } else {
-            // Если сервер вернул ошибку
-            const errorData = await response.json();
-            throw new Error(errorData.detail || 'Произошла ошибка при отправке сообщения');
-        }
-    } catch (error) {
-        console.error('Ошибка при отправке сообщения:', error);
-        alert('Не удалось отправить сообщение: ' + error.message);
-    } finally {
-        // Восстанавливаем кнопку
-        const submitButton = document.getElementById('submitReport');
-        submitButton.disabled = false;
-        submitButton.innerHTML = 'Відправити повідомлення';
-    }
-}
-
-// Очистка ресурсов при закрытии модального окна
-document.addEventListener('DOMContentLoaded', () => {
-    const reportModal = document.getElementById('reportModal');
-    if (reportModal) {
-        // Обработчик события перед скрытием модального окна
-        reportModal.addEventListener('hide.bs.modal', () => {
-            // Убираем фокус с кнопки закрытия перед скрытием модального окна
-            document.activeElement.blur();
-            // Возвращаем фокус на элемент, который вызвал модальное окно (обычно кнопка "Сообщить об опасности")
-            const reportBtn = document.querySelector('.report-btn');
-            if (reportBtn) {
-                setTimeout(() => {
-                    reportBtn.focus();
-                }, 0);
-            }
-        });
-        
-        // Обработчик события после полного скрытия модального окна
-        reportModal.addEventListener('hidden.bs.modal', () => {
-            stopCamera();
-            stopGpsTracking();
+            // Store the state in localStorage
+            localStorage.setItem('objectListCollapsed', 'true');
         });
     }
+    
+    if (restoreListBtn && objectList) {
+        restoreListBtn.addEventListener('click', (e) => {
+            e.preventDefault(); // Prevent the default link behavior
+            objectList.classList.remove('collapsed');
+            restoreListBtn.classList.add('d-none');
+            
+            // Store the state in localStorage
+            localStorage.setItem('objectListCollapsed', 'false');
+        });
+    }
+    
+    // Check if there's a saved state in localStorage
+    const savedState = localStorage.getItem('objectListCollapsed');
+    if (savedState === 'true' && objectList && restoreListBtn) {
+        objectList.classList.add('collapsed');
+        restoreListBtn.classList.remove('d-none');
+    }
+    
+    // Add event listeners for the filter buttons
+    const applyFiltersBtn = document.getElementById('applyFilters');
+    if (applyFiltersBtn) {
+        applyFiltersBtn.addEventListener('click', applyFilters);
+    }
+    
+    const resetFiltersBtn = document.getElementById('resetFilters');
+    if (resetFiltersBtn) {
+        resetFiltersBtn.addEventListener('click', resetFilters);
+    }
+    
+    // Initialize current user info
+    getCurrentUser();
+    
+    // Load objects data
+    loadExplosiveObjects();
 });
 
 // Функция добавления маркеров на карту
@@ -1432,4 +1003,263 @@ function filterMarkersByRegion() {
     
     // Update the objects list with filtered objects
     renderObjects(filteredObjects);
+}
+
+// Функция для фильтрации маркеров по региону на карте (правый фильтр)
+function filterMapMarkersByRegion() {
+    const regionFilter = document.getElementById('regionFilter');
+    if (!regionFilter) return;
+    
+    const selectedRegionId = regionFilter.value;
+    
+    // Show all markers if "All regions" is selected
+    if (selectedRegionId === 'all') {
+        markers.forEach(marker => {
+            if (marker instanceof google.maps.Marker) {
+                marker.setMap(map);
+            } else if (marker instanceof google.maps.marker.AdvancedMarkerElement) {
+                marker.map = map;
+            }
+        });
+    } else {
+        // Filter markers by region ID
+        markers.forEach((marker, index) => {
+            const obj = explosiveObjects[index];
+            if (!obj) return;
+            
+            const show = obj.region_id.toString() === selectedRegionId;
+            
+            if (marker instanceof google.maps.Marker) {
+                marker.setMap(show ? map : null);
+            } else if (marker instanceof google.maps.marker.AdvancedMarkerElement) {
+                marker.map = show ? map : null;
+            }
+        });
+        
+        // If a specific region is selected, center the map on it
+        if (map) {
+            const selectedRegion = regions.find(r => r.id.toString() === selectedRegionId);
+            if (selectedRegion && selectedRegion.center_lat && selectedRegion.center_lng) {
+                map.setCenter({ lat: selectedRegion.center_lat, lng: selectedRegion.center_lng });
+                map.setZoom(selectedRegion.zoom_level || 10);
+            }
+        }
+    }
+    
+    // Also update the left sidebar filter to match
+    const sidebarFilter = document.getElementById('filterRegion');
+    if (sidebarFilter && sidebarFilter.value !== selectedRegionId) {
+        sidebarFilter.value = selectedRegionId;
+        filterMarkersByRegion(); // Update the sidebar listing
+    }
+}
+
+// Function to apply all filters
+function applyFilters() {
+    const statusFilter = document.getElementById('filterStatus').value;
+    const regionFilter = document.getElementById('filterRegion').value;
+    const priorityFilter = document.getElementById('filterPriority').value;
+    
+    // Clear existing markers
+    clearMarkers();
+    
+    // Filter objects
+    let filteredObjects = [...explosiveObjects];
+    
+    // Apply status filter
+    if (statusFilter !== 'all') {
+        filteredObjects = filteredObjects.filter(obj => obj.status === statusFilter);
+    }
+    
+    // Apply region filter
+    if (regionFilter !== 'all') {
+        filteredObjects = filteredObjects.filter(obj => obj.region_id.toString() === regionFilter);
+    }
+    
+    // Apply priority filter
+    if (priorityFilter !== 'all') {
+        filteredObjects = filteredObjects.filter(obj => obj.priority === priorityFilter);
+    }
+    
+    // Add filtered markers to map
+    filteredObjects.forEach(obj => {
+        addMarker(obj);
+    });
+    
+    // Update the objects list with filtered objects
+    renderObjects(filteredObjects);
+}
+
+// Function to reset all filters
+function resetFilters() {
+    // Reset filter dropdowns
+    document.getElementById('filterStatus').value = 'all';
+    document.getElementById('filterRegion').value = 'all';
+    
+    const priorityFilter = document.getElementById('filterPriority');
+    if (priorityFilter) {
+        priorityFilter.value = 'all';
+    }
+    
+    // Clear current markers
+    clearMarkers();
+    
+    // Add all markers back to map
+    addMarkersToMap();
+    
+    // Update the objects list
+    renderObjects();
+}
+
+// Function to add a single marker to the map
+function addMarker(obj) {
+    // Determine marker icon based on status
+    let markerIcon;
+    
+    if (obj.status === 'mined' || obj.status === 'dangerous') {
+        // Use red flag for dangerous objects
+        markerIcon = {
+            url: "/static/images/flag_red.png",
+            scaledSize: new google.maps.Size(48, 48),
+            anchor: new google.maps.Point(6, 48)
+        };
+    } else if (obj.status === 'demined') {
+        markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png" };
+    } else if (obj.status === 'unconfirmed') {
+        markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png" };
+    } else if (obj.status === 'archived') {
+        markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png" };
+    }
+    
+    let marker;
+    
+    // Check if AdvancedMarkerElement is available
+    if (google.maps.marker && google.maps.marker.AdvancedMarkerElement) {
+        // Create element for marker content
+        const markerContent = document.createElement('div');
+        
+        if (obj.status === 'mined' || obj.status === 'dangerous') {
+            // For dangerous objects, use flag image
+            const img = document.createElement('img');
+            img.src = "/static/images/flag_red.png";
+            img.style.width = '48px';
+            img.style.height = '48px';
+            markerContent.style.position = 'relative';
+            markerContent.style.transform = 'translate(-6px, -48px)';
+            markerContent.appendChild(img);
+        } else {
+            // For other statuses, create colored circle
+            markerContent.style.width = '20px';
+            markerContent.style.height = '20px';
+            markerContent.style.borderRadius = '50%';
+            markerContent.style.border = '2px solid white';
+            
+            // Determine circle color based on status
+            if (obj.status === 'demined') {
+                markerContent.style.backgroundColor = '#4CAF50'; // green
+            } else if (obj.status === 'unconfirmed') {
+                markerContent.style.backgroundColor = '#FFC107'; // yellow
+            } else if (obj.status === 'archived') {
+                markerContent.style.backgroundColor = '#607D8B'; // gray/blue
+            }
+        }
+        
+        // Create AdvancedMarkerElement
+        marker = new google.maps.marker.AdvancedMarkerElement({
+            position: { lat: obj.latitude, lng: obj.longitude },
+            map: map,
+            title: obj.title || `Объект #${obj.id}`,
+            content: markerContent
+        });
+    } else {
+        // Fallback to regular marker
+        marker = new google.maps.Marker({
+            position: { lat: obj.latitude, lng: obj.longitude },
+            map: map,
+            title: obj.title || `Объект #${obj.id}`,
+            icon: markerIcon
+        });
+    }
+    
+    // Check if the object belongs to the current user
+    const isMyObject = currentUser && obj.reported_by === currentUser.id;
+    
+    // Get HTML for displaying photo
+    let photoHtml = '';
+    if (obj.photo_url) {
+        photoHtml = `
+            <div style="margin-bottom: 10px; text-align: center;">
+                <img src="${obj.photo_url}" alt="Фото об'єкта" style="max-width: 100%; max-height: 200px; border-radius: 4px; cursor: pointer;" 
+                    class="object-photo" data-photo-url="${obj.photo_url}" 
+                    onclick="showFullSizePhoto('${obj.photo_url}', '${obj.title}')"
+                    onerror="this.onerror=null; this.src='/static/images/no-image.svg'; this.alt='Фото недоступно';">
+                <div class="small text-muted">Натисніть на фото для збільшення</div>
+            </div>`;
+    }
+    
+    // Create info window with edit option if it's the user's object
+    let content = `
+        <div style="padding: 10px;">
+            <h5 style="margin-top: 0;">${obj.title}</h5>
+            ${photoHtml}
+            <p style="margin-bottom: 5px;"><strong>Статус:</strong> ${getStatusText(obj.status)}</p>
+            <p style="margin-bottom: 5px;"><strong>Пріоритет:</strong> ${getPriorityText(obj.priority)}</p>
+            <p style="margin-bottom: 5px;"><strong>Регіон:</strong> ${obj.region_name}</p>
+            <p style="margin-bottom: 5px;"><strong>Дата виявлення:</strong> ${new Date(obj.reported_at).toLocaleDateString('uk-UA')}</p>
+            <p>${obj.description ? (obj.description.length > 100 ? obj.description.substring(0, 100) + '...' : obj.description) : 'Опис відсутній'}</p>
+            <div class="mt-2">
+                <button onclick="viewObjectDetails(${obj.id})" class="btn btn-sm btn-primary">Детальніше</button>
+    `;
+    
+    // If the object belongs to the current user, add edit button
+    if (isMyObject) {
+        content += `
+                <button class="btn btn-sm btn-warning edit-object-btn ms-2" data-object-id="${obj.id}">Редагувати</button>
+        `;
+    }
+    
+    content += `
+            </div>
+        </div>
+    `;
+    
+    const infoWindow = new google.maps.InfoWindow({ content });
+    
+    // Add click handler to marker
+    if (marker.addEventListener) {
+        // For AdvancedMarkerElement use addEventListener
+        marker.addEventListener('click', () => {
+            infoWindow.open(map, marker);
+            
+            // Add event handler for edit button inside infoWindow
+            setTimeout(() => {
+                const editBtn = document.querySelector(`.edit-object-btn[data-object-id="${obj.id}"]`);
+                if (editBtn) {
+                    editBtn.addEventListener('click', () => {
+                        editObject(obj.id);
+                    });
+                }
+            }, 100);
+        });
+    } else {
+        // For regular Marker use addListener
+        marker.addListener('click', () => {
+            infoWindow.open(map, marker);
+            
+            // Add event handler for edit button inside infoWindow
+            setTimeout(() => {
+                const editBtn = document.querySelector(`.edit-object-btn[data-object-id="${obj.id}"]`);
+                if (editBtn) {
+                    editBtn.addEventListener('click', () => {
+                        editObject(obj.id);
+                    });
+                }
+            }, 100);
+        });
+    }
+    
+    // Add marker to array
+    markers.push(marker);
+    
+    return marker;
 }

@@ -988,6 +988,24 @@ async def update_explosive_object(
             if "priority" in object_data:
                 update_fields.append("priority = ?")
                 update_values.append(object_data["priority"])
+            
+            # Добавляем возможность обновления региона
+            if "region_id" in object_data:
+                # Проверяем существование региона перед обновлением
+                region_cursor = await conn.execute(
+                    "SELECT id FROM regions WHERE id = ?", 
+                    (object_data["region_id"],)
+                )
+                region = await region_cursor.fetchone()
+                
+                if region:
+                    update_fields.append("region_id = ?")
+                    update_values.append(object_data["region_id"])
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Region with ID {object_data['region_id']} not found"
+                    )
         
         # Если нет полей для обновления, возвращаем ошибку
         if not update_fields:
@@ -1184,6 +1202,15 @@ async def report_danger(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error processing danger report"
         )
+
+# Tasks page for sapper - display list of explosive objects
+@app.get("/tasks", response_class=HTMLResponse)
+async def tasks_page(request: Request, current_user: UserResponse = Depends(get_current_user)):
+    if current_user.role != "sapper":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized access")
+    return templates.TemplateResponse(
+        "tasks.html", {"request": request, "user": current_user}
+    )
 
 # Run the application
 if __name__ == "__main__":

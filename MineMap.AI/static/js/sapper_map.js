@@ -32,6 +32,11 @@ async function loadRegions() {
         ];
         console.log('Завантажено регіонів:', regions.length);
         
+        // Initialize the map utilities with our regions data
+        if (typeof initMapUtilities === 'function') {
+            initMapUtilities(regions);
+        }
+        
         // Заповнюємо випадаючий список регіонів в формі
         const regionSelect = document.getElementById('region');
         if (regionSelect) {
@@ -42,6 +47,11 @@ async function loadRegions() {
                 option.textContent = region.name;
                 regionSelect.appendChild(option);
             });
+        }
+        
+        // Set up auto-detection of regions
+        if (typeof setupAutoRegionDetection === 'function') {
+            setupAutoRegionDetection('latitude', 'longitude', 'region');
         }
         
         // Заповнюємо випадаючий список фільтра регіонів
@@ -224,58 +234,35 @@ async function initData() {
     }
 }
 
-// Инициализация карты Google Maps
-function initMap() {
-    try {
-        // Проверка доступности Google Maps API
-        if (typeof google === 'undefined') {
-            console.warn('Google Maps API не доступен');
-            return;
-        }
+// Модифікуємо функцію ініціалізації карти
+// Deleted: let originalInitMap = initMap;
+// Deleted: initMap = function() { ... }
+// ... existing code around line 237 ...
+
+// Ensure that after loadRegions and initMapUtilities, we call initMap then initData
+// For example, after dynamically loading Google Maps, in initGoogleMaps (in HTML template) initMap() is called, then we need to call initData()
+// Add at end of initGoogleMaps in template: initData();
+
+// ... existing code rest remains unchanged ...
+
+// Add toggle functionality for admin panel
+document.addEventListener('DOMContentLoaded', () => {
+    const togglePanelBtn = document.getElementById('togglePanelBtn');
+    const adminPanel = document.querySelector('.admin-controls');
+    
+    if (togglePanelBtn && adminPanel) {
+        togglePanelBtn.addEventListener('click', () => {
+            adminPanel.classList.toggle('collapsed');
+            
+            // Store the state in localStorage to persist across page reloads
+            const isCollapsed = adminPanel.classList.contains('collapsed');
+            localStorage.setItem('adminPanelCollapsed', isCollapsed);
+        });
         
-        // Получаем элемент карты
-        const mapElement = document.getElementById("map");
-        if (!mapElement) {
-            console.warn('Элемент карты не найден на странице');
-            return;
-        }
-        
-        // Центр Украины
-        const center = { lat: 49.0, lng: 31.0 };
-        
-        // Получаем Map ID из глобальной переменной
-        const mapId = window.gmapId || '';
-        
-        // Создаем карту с Map ID, если он доступен
-        const mapOptions = {
-            zoom: 6,
-            center: center,
-            mapTypeId: google.maps.MapTypeId.ROADMAP,
-            streetViewControl: false
-        };
-        
-        // Добавляем Map ID если он доступен
-        if (mapId && mapId !== 'YOUR_MAP_ID_HERE') {
-            mapOptions.mapId = mapId;
-        }
-        
-        // Создаем карту
-        map = new google.maps.Map(mapElement, mapOptions);
-        
-        console.log('Карта инициализирована успешно');
-        
-        // Загружаем данные о взрывоопасных объектах
-        initData();
-        
-        // Обработчики для кнопок действий
-        document.getElementById('completeObjectBtn').addEventListener('click', completeObject);
-        
-    } catch (error) {
-        console.error('Ошибка при инициализации карты:', error);
-        const mapElement = document.getElementById("map");
-        if (mapElement) {
-            mapElement.innerHTML = '<div class="alert alert-danger">Ошибка при инициализации карты: ' + error.message + '</div>';
-            mapElement.style.height = 'auto';
+        // Check if there's a saved state in localStorage
+        const savedState = localStorage.getItem('adminPanelCollapsed');
+        if (savedState === 'true') {
+            adminPanel.classList.add('collapsed');
         }
     }
-} 
+}); 

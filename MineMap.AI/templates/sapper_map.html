@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Карта сапера | MineMap.UA</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <style>
         body {
             margin: 0;
@@ -15,166 +16,106 @@
             height: calc(100vh - 56px);
             width: 100%;
         }
-        .navbar {
-            background-color: #343a40;
-        }
-        .navbar-brand {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+        .gm-fullscreen-control { display: none !important; }
+        .navbar { background-color: #343a40; }
+        .navbar-brand { display: flex; align-items: center; gap: 10px; }
         .status-legend {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: white;
-            padding: 10px 15px;
-            border-radius: 5px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            display: flex;
-            gap: 15px;
-            z-index: 1000;
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background-color: white; padding: 10px 15px; border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; gap: 15px; z-index: 1000;
         }
-        .status-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 12px;
-        }
-        .status-color {
-            width: 16px;
-            height: 16px;
-            border-radius: 3px;
-        }
+        .status-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+        .status-color { width: 16px; height: 16px; border-radius: 3px; }
         .purple { background-color: #8b5cf6; }
         .red { background-color: #ef4444; }
         .yellow { background-color: #f59e0b; }
         .gray { background-color: #6b7280; }
         .green { background-color: #10b981; }
-        .map-controls {
+
+        .btn-group-vertical { position: absolute; bottom: 100px; right: 20px; z-index: 1000; }
+        .admin-controls {
+            position: absolute; top: 150px; left: 10px; width: 300px;
+            background-color: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 15px; z-index: 1000;
+            transition: transform 0.3s ease, width 0.3s ease;
+        }
+        .admin-controls.collapsed {
+            transform: translateX(-290px);
+            width: 50px;
+            overflow: hidden;
+            padding: 10px 5px;
+        }
+        .toggle-panel-btn {
             position: absolute;
-            top: 80px;
             right: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            z-index: 1000;
-        }
-        .map-control-btn {
-            width: 40px;
-            height: 40px;
-            background-color: white;
+            top: 10px;
+            background: none;
             border: none;
-            border-radius: 4px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            font-size: 16px;
             cursor: pointer;
+            padding: 5px;
+            color: #6c757d;
+            z-index: 1001;
         }
-        .map-control-btn:hover {
-            background-color: #f8f9fa;
+        .collapsed .toggle-panel-btn {
+            right: 5px;
+            transform: rotate(180deg);
         }
-        .action-btn {
-            position: absolute;
-            bottom: 100px;
-            right: 20px;
-            z-index: 1000;
-        }
-        .add-object-btn {
-            bottom: 160px;
-        }
-        #addObjectModal .modal-body, #updateStatusModal .modal-body {
-            max-height: 70vh;
-            overflow-y: auto;
+        .collapsed .panel-content {
+            display: none;
         }
         .user-role-badge {
-            background-color: #dc3545;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            margin-left: 10px;
+            background-color: #dc3545; color: white; padding: 2px 8px; border-radius: 12px;
+            font-size: 0.8rem; margin-left: 10px;
         }
-        .priority-high {
-            background-color: #dc3545;
-            color: white;
-            font-weight: bold;
-            padding: 2px 8px;
-            border-radius: 4px;
+        .object-item { padding: 10px; border-bottom: 1px solid #e9ecef; cursor: pointer; }
+        .object-item:hover { background-color: #f8f9fa; }
+        .priority-badge {
+            font-size: 0.7rem; padding: 0.2em 0.6em; border-radius: 10px;
         }
-        .priority-medium {
-            background-color: #fd7e14;
-            color: white;
-            font-weight: bold;
-            padding: 2px 8px;
-            border-radius: 4px;
+        .high { background-color: #dc3545; color: white; }
+        .medium { background-color: #fd7e14; color: white; }
+        .low { background-color: #20c997; color: white; }
+        .bg-purple { background-color: #8b5cf6; color: white; }
+        .border-danger { border-radius: 10px; }
+        .modal-dialog {
+            --bs-modal-margin: 0.5rem;
+            margin: var(--bs-modal-margin);
+            position: absolute !important;
+            left: 50% !important;
+            top: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            max-width: 500px;
+            width: 95%;
         }
-        .priority-low {
-            background-color: #20c997;
-            color: white;
-            font-weight: bold;
-            padding: 2px 8px;
-            border-radius: 4px;
-        }
-        .object-list {
-            position: absolute;
-            top: 70px;
-            left: 10px;
-            width: 300px;
-            max-height: calc(100vh - 130px);
-            overflow-y: auto;
-            background-color: white;
+        .modal-content {
+            --bs-modal-padding: 0.5rem;
+            padding: 0;
             border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            padding: 15px;
-            z-index: 1000;
+            overflow: hidden;
         }
-        .object-item {
-            padding: 10px;
-            border-bottom: 1px solid #e9ecef;
-            cursor: pointer;
+        .modal-body {
+            padding: var(--bs-modal-padding);
+            overflow-y: auto; 
+            max-height: 80vh; 
         }
-        .object-item:hover {
-            background-color: #f8f9fa;
-        }
-        .object-info {
-            margin-top: 5px;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .border-danger {
-            border-radius: 10px;
-        }
-        .report-btn {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            z-index: 1000;
-            padding: 10px 20px;
-            font-weight: bold;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-            border-radius: 30px;
-            transition: all 0.3s ease;
-        }
-        .report-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.4);
-        }
+        .modal-header, .modal-footer { padding: var(--bs-modal-padding); }
     </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">
             <a class="navbar-brand" href="/">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-exclamation-triangle-fill" viewBox="0 0 16 16">
-                    <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" style="padding-bottom: 5px; color: #dc3545;" width="25" height="25" fill="currentColor" class="bi bi-exclamation-triangle-fill" viewBox="0 0 16 16">
+                        <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"></path>
                 </svg>
+                </div>
                 Система інформування про вибухонебезпечні предмети
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false"
+                    aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
@@ -185,6 +126,8 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/tasks">Мої завдання</a>
                     </li>
+                </ul>
+                <ul class="navbar-nav">
                     <li class="nav-item">
                         <a class="nav-link" href="/profile">Профіль</a>
                     </li>
@@ -198,9 +141,14 @@
 
     <div id="map"></div>
 
-    <div class="object-list">
-        <h6>Список об'єктів</h6>
-        <div class="form-group mb-3">
+    <div class="admin-controls">
+        <button class="toggle-panel-btn" id="togglePanelBtn" title="Згорнути/Розгорнути">
+            <i class="bi bi-chevron-left"></i>
+        </button>
+        <div class="panel-content">
+            <h6>Адміністративні інструменти</h6>
+            <div class="mb-3">
+                <label for="filterStatus" class="form-label">Фільтр за статусом</label>
             <select class="form-select form-select-sm" id="filterStatus">
                 <option value="all">Всі статуси</option>
                 <option value="secret">Секретні</option>
@@ -210,86 +158,53 @@
                 <option value="demined">Розміновані</option>
             </select>
         </div>
-        <div id="objectsList">
+            <div class="mb-3">
+                <label for="filterRegion" class="form-label">Фільтр за регіоном</label>
+                <select class="form-select form-select-sm" id="filterRegion">
+                    <option value="all">Всі регіони</option>
             <!-- Will be populated dynamically -->
+                </select>
+            </div>
+            <div class="mb-3">
+                <label for="filterPriority" class="form-label">Фільтр за пріоритетом</label>
+                <select class="form-select form-select-sm" id="filterPriority">
+                    <option value="all">Всі пріоритети</option>
+                    <option value="secret">Секретно</option>
+                    <option value="high">Високий</option>
+                    <option value="medium">Середній</option>
+                    <option value="low">Низький</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <button id="applyFilters" class="btn btn-sm btn-primary">Застосувати фільтри</button>
+                <button id="resetFilters" class="btn btn-sm btn-outline-secondary ms-2">Скинути</button>
+            </div>
+            <hr>
+            <div class="mb-3">
+                <label class="form-label">Останні додані об'єкти</label>
+                <div id="recentObjects" class="overflow-auto" style="max-height:200px;"></div>
+            </div>
         </div>
     </div>
 
     <div class="status-legend">
-        <div class="status-item">
-            <div class="status-color purple"></div>
-            <span>Секретна</span>
-        </div>
-        <div class="status-item">
-            <div class="status-color red"></div>
-            <span>Замінована</span>
-        </div>
-        <div class="status-item">
-            <div class="status-color yellow"></div>
-            <span>Непідтверджена</span>
-        </div>
-        <div class="status-item">
-            <div class="status-color gray"></div>
-            <span>Архів</span>
-        </div>
-        <div class="status-item">
-            <div class="status-color green"></div>
-            <span>Розмінована</span>
-        </div>
-        <div class="status-item">
-            <div class="status-color border border-danger bg-transparent"></div>
-            <span>Червона зона</span>
-        </div>
+        <div class="status-item"><div class="status-color purple"></div><span>Секретна зона</span></div>
+        <div class="status-item"><div class="status-color red"></div><span>Замінована</span></div>
+        <div class="status-item"><div class="status-color yellow"></div><span>Непідтверджена</span></div>
+        <div class="status-item"><div class="status-color gray"></div><span>Архів</span></div>
+        <div class="status-item"><div class="status-color green"></div><span>Розмінована</span></div>
+        <div class="status-item"><div class="status-color border border-danger bg-transparent"></div><span>Червона зона</span></div>
     </div>
 
-    <div class="map-controls">
-        <button class="map-control-btn" id="zoomIn" title="Збільшити">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-lg" viewBox="0 0 16 16">
-                <path d="M8 0a1 1 0 0 1 1 1v6h6a1 1 0 1 1 0 2H9v6a1 1 0 1 1-2 0V9H1a1 1 0 0 1 0-2h6V1a1 1 0 0 1 1-1z"/>
-            </svg>
-        </button>
-        <button class="map-control-btn" id="zoomOut" title="Зменшити">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-dash-lg" viewBox="0 0 16 16">
-                <path d="M0 8a1 1 0 0 1 1-1h14a1 1 0 1 1 0 2H1a1 1 0 0 1-1-1z"/>
-            </svg>
-        </button>
-        <button class="map-control-btn" id="layers" title="Шари">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layers" viewBox="0 0 16 16">
-                <path d="M8.235 1.559a.5.5 0 0 0-.47 0l-7.5 4a.5.5 0 0 0 0 .882L3.188 8 .264 9.559a.5.5 0 0 0 0 .882l7.5 4a.5.5 0 0 0 .47 0l7.5-4a.5.5 0 0 0 0-.882L12.813 8l2.922-1.559a.5.5 0 0 0 0-.882l-7.5-4zm3.515 7.008L14.438 10 8 13.433 1.562 10 4.25 8.567l3.515 1.874a.5.5 0 0 0 .47 0l3.515-1.874zM8 9.433 1.562 6 8 2.567 14.438 6 8 9.433z"/>
-            </svg>
-        </button>
-        <button class="map-control-btn" id="route" title="Маршрут">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-signpost-split" viewBox="0 0 16 16">
-                <path d="M7 7V1.414a1 1 0 0 1 2 0V2h5a1 1 0 0 1 .8.4l.975 1.3a.5.5 0 0 1 0 .6L14.8 5.6a1 1 0 0 1-.8.4H9v10H7v-5H2a1 1 0 0 1-.8-.4L.225 9.3a.5.5 0 0 1 0-.6L1.2 7.4A1 1 0 0 1 2 7h5zm1 3V8H2l-.75 1L2 10h6zm0-5h6l.75-1L14 3H8v2z"/>
-            </svg>
-        </button>
-    </div>
-
-    <div class="region-filter" style="position: absolute; top: 180px; right: 10px; z-index: 1000; background-color: white; padding: 10px; border-radius: 4px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); width: 200px;">
+    <div class="region-filter" style="position:absolute;top:70px;right:10px;z-index:1000;background:white;padding:10px;border-radius:4px;box-shadow:0 2px 6px rgba(0,0,0,0.3);width:200px;">
         <label for="regionFilter" class="form-label small mb-1">Фільтр за регіоном:</label>
         <select class="form-select form-select-sm" id="regionFilter">
             <option value="all">Всі регіони</option>
-            <!-- Регіони будуть додані динамічно -->
         </select>
     </div>
 
-    <button class="btn btn-primary action-btn add-object-btn" data-bs-toggle="modal" data-bs-target="#addObjectModal">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-lg" viewBox="0 0 16 16">
-            <path d="M8 0a1 1 0 0 1 1 1v6h6a1 1 0 1 1 0 2H9v6a1 1 0 1 1-2 0V9H1a1 1 0 0 1 0-2h6V1a1 1 0 0 1 1-1z"/>
-        </svg>
-        Додати об'єкт
-    </button>
-
-    <button class="btn btn-success action-btn" data-bs-toggle="modal" data-bs-target="#updateStatusModal">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-check2-circle" viewBox="0 0 16 16">
-            <path d="M2.5 8a5.5 5.5 0 0 1 8.25-4.764.5.5 0 0 0 .5-.866A6.5 6.5 0 1 0 14.5 8a.5.5 0 0 0-1 0 5.5 5.5 0 1 1-11 0z"/>
-            <path d="M15.354 3.354a.5.5 0 0 0-.708-.708L8 9.293 5.354 6.646a.5.5 0 1 0-.708.708l3 3a.5.5 0 0 0 .708 0l7-7z"/>
-        </svg>
-        Змінити статус
-    </button>
-
     <!-- Button to report danger -->
-    <button class="btn btn-danger report-btn" id="reportDangerBtn">
+    <button class="btn btn-danger report-btn" id="reportDangerBtn" style="position:absolute; top:5px; left: 50%; transform: translateX(-50%); font-size: 20px;  z-index:1000;">
         <i class="bi bi-exclamation-triangle-fill me-2"></i>Повідомити про небезпеку
     </button>
 
@@ -302,6 +217,24 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Фото ситуації</label>
+                            <div class="camera-wrapper position-relative mb-2" style="width:100%; height:300px; background-color:#000;">
+                                <video id="cameraPreview" style="width:100%; height:100%; object-fit:cover;" autoplay muted></video>
+                                <canvas id="photoCanvas" style="display:none; width:100%; height:100%;"></canvas>
+                                <div id="gpsStatus" class="position-absolute top-0 end-0 p-2 badge bg-warning">Отримання GPS...</div>
+                                <div id="photoCountdown" class="position-absolute top-50 start-50 translate-middle badge bg-danger fs-1" style="display:none;">10</div>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <button type="button" id="startCamera" class="btn btn-sm btn-primary">Увімкнути камеру</button>
+                                <button type="button" id="takePhoto" class="btn btn-sm btn-success" disabled>Зробити фото</button>
+                                <button type="button" id="retakePhoto" class="btn btn-sm btn-secondary" style="display:none;">Перезняти</button>
+                            </div>
+                            <input type="hidden" id="photoData" name="photoData">
+                            <small class="form-text text-muted">
+                                <i class="bi bi-info-circle"></i> Для точного визначення місцезнаходження залишайтесь на місці під час фотографування.
+                            </small>
+                        </div>
                     <form id="reportForm">
                         <div class="mb-3">
                             <label for="title" class="form-label">Назва</label>
@@ -312,35 +245,19 @@
                             <textarea class="form-control" id="description" rows="3"></textarea>
                         </div>
                         <div class="mb-3">
-                            <label for="latitude" class="form-label">Широта</label>
-                            <input type="number" step="any" class="form-control" id="latitude" required>
-                            <small class="form-text text-muted">Клікніть на карті, щоб вибрати місце розташування</small>
-                        </div>
-                        <div class="mb-3">
-                            <label for="longitude" class="form-label">Довгота</label>
-                            <input type="number" step="any" class="form-control" id="longitude" required>
-                        </div>
-                        <div class="mb-3">
                             <label for="region" class="form-label">Регіон</label>
                             <select class="form-select" id="region" required>
                                 <!-- Will be populated dynamically -->
                             </select>
                         </div>
                         <div class="mb-3">
-                            <label for="priority" class="form-label">Пріоритет</label>
-                            <select class="form-select" id="priority" required>
-                                <option value="high">Високий</option>
-                                <option value="medium" selected>Середній</option>
-                                <option value="low">Низький</option>
-                            </select>
+                            <label for="latitude" class="form-label">Широта</label>
+                            <input type="number" step="any" class="form-control" id="latitude" required readonly>
+                            <small class="form-text text-muted">GPS-координати визначаються автоматично</small>
                         </div>
                         <div class="mb-3">
-                            <label for="status" class="form-label">Статус</label>
-                            <select class="form-select" id="status" required>
-                                <option value="unconfirmed">Непідтверджений</option>
-                                <option value="mined">Замінований</option>
-                                <option value="demined">Розмінований</option>
-                            </select>
+                            <label for="longitude" class="form-label">Довгота</label>
+                            <input type="number" step="any" class="form-control" id="longitude" required readonly>
                         </div>
                     </form>
                 </div>
@@ -352,624 +269,28 @@
         </div>
     </div>
 
-    <!-- Modal for adding new object -->
-    <div class="modal fade" id="addObjectModal" tabindex="-1" aria-labelledby="addObjectModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="addObjectModalLabel">Додати новий об'єкт</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="addObjectForm">
-                        <div class="mb-3">
-                            <label for="title" class="form-label">Назва</label>
-                            <input type="text" class="form-control" id="title" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="description" class="form-label">Опис</label>
-                            <textarea class="form-control" id="description" rows="3"></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <label for="latitude" class="form-label">Широта</label>
-                            <input type="number" step="any" class="form-control" id="latitude" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="longitude" class="form-label">Довгота</label>
-                            <input type="number" step="any" class="form-control" id="longitude" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="status" class="form-label">Статус</label>
-                            <select class="form-select" id="status" required>
-                                <option value="secret">Секретна</option>
-                                <option value="mined">Замінована</option>
-                                <option value="unconfirmed">Непідтверджена</option>
-                                <option value="archived">Архів</option>
-                                <option value="demined">Розмінована</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label for="priority" class="form-label">Пріоритет</label>
-                            <select class="form-select" id="priority" required>
-                                <option value="high">Високий</option>
-                                <option value="medium">Середній</option>
-                                <option value="low">Низький</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label for="region" class="form-label">Регіон</label>
-                            <select class="form-select" id="region" required>
-                                <!-- Will be populated dynamically -->
-                            </select>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
-                    <button type="button" class="btn btn-primary" id="saveObject">Зберегти</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal for updating status -->
-    <div class="modal fade" id="updateStatusModal" tabindex="-1" aria-labelledby="updateStatusModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="updateStatusModalLabel">Змінити статус об'єкта</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="updateStatusForm">
-                        <div class="mb-3">
-                            <label for="objectId" class="form-label">Вибрати об'єкт</label>
-                            <select class="form-select" id="objectId" required>
-                                <!-- Will be populated dynamically -->
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label for="newStatus" class="form-label">Новий статус</label>
-                            <select class="form-select" id="newStatus" required>
-                                <option value="secret">Секретна</option>
-                                <option value="mined">Замінована</option>
-                                <option value="unconfirmed">Непідтверджена</option>
-                                <option value="archived">Архів</option>
-                                <option value="demined">Розмінована</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label for="statusNote" class="form-label">Примітка</label>
-                            <textarea class="form-control" id="statusNote" rows="3"></textarea>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
-                    <button type="button" class="btn btn-success" id="saveStatus">Зберегти</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="/static/js/mine_data.js"></script>
-    <script src="/static/js/sapper_map.js"></script>
+    <script src="/static/js/map_utilities.js"></script>
+    <script src="/static/js/admin_map.js?v=1.0.2"></script>
+    <script src="/static/js/danger_reporting.js"></script>
+    <script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
     <script>
-        // Загружаем Google Maps API
         const apiKey = "{{ google_maps_api_key }}";
         const apiUrl = apiKey && apiKey !== "YOUR_GOOGLE_MAPS_API_KEY_HERE" && apiKey !== ""
-            ? `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&callback=initMap`
-            : `https://maps.googleapis.com/maps/api/js?loading=async&callback=initMap`;
+            ? `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&callback=initGoogleMaps`
+            : `https://maps.googleapis.com/maps/api/js?loading=async&callback=initGoogleMaps`;
 
         if (!apiKey || apiKey === "YOUR_GOOGLE_MAPS_API_KEY_HERE" || apiKey === "") {
-            console.warn("API-ключ Google Maps не указан. Карта может работать с ограничениями (водяной знак).");
+            console.warn("API-ключ Google Maps не указан. Карта может работать с ограничениями.");
         }
 
-        // Создаем скрипт динамически
-        const script = document.createElement('script');
-        script.src = apiUrl;
-        script.async = true;
-        script.defer = true;
-        script.onerror = () => {
-            console.error("Ошибка загрузки Google Maps API. Проверьте подключение к интернету или API-ключ.");
-            const mapElement = document.getElementById("map");
-            if (mapElement) {
-                mapElement.innerHTML = `
-                    <div class="alert alert-danger">
-                        Не удалось загрузить карту. Проверьте подключение к интернету или API-ключ.
-                    </div>`;
-                mapElement.style.height = 'auto';
-            }
-        };
+        function initGoogleMaps() {
+            initMap();
+                }
+
+        const script = document.createElement('script'); script.src = apiUrl; script.async = true; script.defer = true;
+        script.onerror = () => { console.error("Ошибка загрузки Google Maps API."); const m = document.getElementById("map"); m && ((m.innerHTML = '<div class="alert alert-danger">Не удалось загрузить карту.</div>'), m.style.height='auto'); };
         document.head.appendChild(script);
-
-        // Клас пульсуючого маркера для Google Maps
-        class PulsatingMarker extends google.maps.Marker {
-            constructor(options) {
-                super(options);
-                
-                // Зберігаємо оригінальний розмір маркера
-                if (options.icon && options.icon.scale) {
-                    this.originalScale = options.icon.scale;
-                    this.animatedIcon = options.icon;
-                    
-                    // Запускаємо анімацію
-                    this.startAnimation();
-                }
-            }
-            
-            startAnimation() {
-                let direction = 1; // 1 = збільшення, -1 = зменшення
-                let scale = this.originalScale;
-                let minScale = this.originalScale * 0.85;
-                let maxScale = this.originalScale * 1.15;
-                
-                this.animationInterval = setInterval(() => {
-                    // Оновлюємо розмір
-                    scale += 0.15 * direction;
-                    
-                    // Перевіряємо межі та змінюємо напрямок при необхідності
-                    if (scale >= maxScale) {
-                        direction = -1;
-                    } else if (scale <= minScale) {
-                        direction = 1;
-                    }
-                    
-                    // Оновлюємо іконку маркера
-                    const newIcon = {...this.animatedIcon, scale: scale};
-                    this.setIcon(newIcon);
-                }, 50);
-            }
-            
-            // Метод для зупинки анімації
-            stopAnimation() {
-                if (this.animationInterval) {
-                    clearInterval(this.animationInterval);
-                }
-            }
-        }
-
-        // Додавання замінованих територій на карту сапера
-        function addMinedTerritories() {
-            const redZoneColor = "#FF0000";
-            
-            minedTerritories.forEach(territory => {
-                if (territory.status === "Червона зона") {
-                    // Створення маркера з прапорцем замість пульсуючого маркера
-                    const marker = new google.maps.Marker({
-                        position: territory.coordinates,
-                        map: map,
-                        title: territory.name,
-                        icon: {
-                            // Використовуємо SVG для прапорця
-                            path: 'M10,1.375c-3.17,0-5.75,2.548-5.75,5.682c0,6.685,5.259,11.276,5.483,11.469c0.152,0.132,0.382,0.132,0.534,0c0.224-0.193,5.481-4.784,5.483-11.469C15.75,3.923,13.171,1.375,10,1.375 M10,17.653c-1.064-1.024-4.929-5.127-4.929-10.596c0-2.68,2.212-4.861,4.929-4.861s4.929,2.181,4.929,4.861C14.927,12.518,11.063,16.627,10,17.653 M10,3.839c-1.815,0-3.286,1.47-3.286,3.286s1.47,3.286,3.286,3.286s3.286-1.47,3.286-3.286S11.815,3.839,10,3.839 M10,9.589c-1.359,0-2.464-1.105-2.464-2.464S8.641,4.661,10,4.661s2.464,1.105,2.464,2.464S11.359,9.589,10,9.589',
-                            fillColor: getDangerLevelColor(territory.dangerLevel),
-                            fillOpacity: 0.9,
-                            strokeColor: '#000000',
-                            strokeWeight: 1,
-                            scale: 1.8,
-                            anchor: new google.maps.Point(10, 17) // Якір у нижній частині прапорця
-                        }
-                    });
-                    
-                    // Створення інформаційного вікна
-                    const infoWindow = new google.maps.InfoWindow({
-                        content: `
-                            <div class="info-window">
-                                <h5>${territory.name}</h5>
-                                <p><strong>Рівень небезпеки:</strong> ${territory.dangerLevel}</p>
-                                <p><strong>Статус:</strong> ${territory.status}</p>
-                                <p><strong>Площа:</strong> ${territory.affectedArea}</p>
-                                <p>${territory.description}</p>
-                                <p><em>${territory.notes}</em></p>
-                                <div class="mt-2">
-                                    <button class="btn btn-sm btn-warning demine-territory" 
-                                        data-territory-id="${territory.id}">
-                                        Розпочати розмінування
-                                    </button>
-                                </div>
-                            </div>
-                        `
-                    });
-                    
-                    // Обробник кліку по маркеру
-                    marker.addListener("click", () => {
-                        if (currentInfoWindow) {
-                            currentInfoWindow.close();
-                        }
-                        infoWindow.open(map, marker);
-                        currentInfoWindow = infoWindow;
-                        
-                        // Додаємо обробник для кнопки розмінування
-                        setTimeout(() => {
-                            const demineButton = document.querySelector('.demine-territory');
-                            if (demineButton) {
-                                demineButton.addEventListener('click', () => {
-                                    const territoryId = demineButton.getAttribute('data-territory-id');
-                                    startDeminingProcess(territoryId);
-                                });
-                            }
-                        }, 100);
-                    });
-                    
-                    // Додаємо маркер до масиву
-                    markers.push(marker);
-                    
-                    // Створення кола для відображення зони
-                    const circleRadius = calculateCircleRadius(territory.affectedArea);
-                    
-                    // Створюємо кластер флажків для мінного поля
-                    createFlagCluster(territory, circleRadius);
-                    
-                    const territoryCircle = new google.maps.Circle({
-                        strokeColor: redZoneColor,
-                        strokeOpacity: 0.8,
-                        strokeWeight: 2,
-                        fillColor: redZoneColor,
-                        fillOpacity: 0.2,
-                        map: map,
-                        center: territory.coordinates,
-                        radius: circleRadius
-                    });
-                }
-            });
-        }
-
-        // Створення кластеру прапорців для мінного поля
-        function createFlagCluster(territory, radius) {
-            // Кількість прапорців залежить від розміру зони та ролі сапера (більше деталей для сапера)
-            const flagCount = Math.min(Math.floor(radius / 4000), 15);
-            
-            // Створюємо прапорці навколо центру
-            for (let i = 0; i < flagCount; i++) {
-                // Розраховуємо випадкове положення в межах круга
-                const angle = Math.random() * 2 * Math.PI;
-                const distance = Math.random() * (radius * 0.85); // Більш рівномірне розподілення для сапера
-                
-                const offsetLat = distance * Math.cos(angle) / 111111; // Приблизне перетворення метрів у градуси широти
-                const offsetLng = distance * Math.sin(angle) / (111111 * Math.cos(territory.coordinates.lat * Math.PI / 180));
-                
-                const flagPosition = {
-                    lat: territory.coordinates.lat + offsetLat,
-                    lng: territory.coordinates.lng + offsetLng
-                };
-                
-                // Створюємо маркер з іконкою прапорця
-                const flagMarker = new google.maps.Marker({
-                    position: flagPosition,
-                    map: map,
-                    title: `${territory.name} - мінне поле`,
-                    icon: {
-                        // Використовуємо SVG для прапорця
-                        path: 'M10,1.375c-3.17,0-5.75,2.548-5.75,5.682c0,6.685,5.259,11.276,5.483,11.469c0.152,0.132,0.382,0.132,0.534,0c0.224-0.193,5.481-4.784,5.483-11.469C15.75,3.923,13.171,1.375,10,1.375 M10,17.653c-1.064-1.024-4.929-5.127-4.929-10.596c0-2.68,2.212-4.861,4.929-4.861s4.929,2.181,4.929,4.861C14.927,12.518,11.063,16.627,10,17.653 M10,3.839c-1.815,0-3.286,1.47-3.286,3.286s1.47,3.286,3.286,3.286s3.286-1.47,3.286-3.286S11.815,3.839,10,3.839 M10,9.589c-1.359,0-2.464-1.105-2.464-2.464S8.641,4.661,10,4.661s2.464,1.105,2.464,2.464S11.359,9.589,10,9.589',
-                        fillColor: getDangerLevelColor(territory.dangerLevel),
-                        fillOpacity: 0.8,
-                        strokeColor: '#000000',
-                        strokeWeight: 1,
-                        scale: 1.5,
-                        anchor: new google.maps.Point(10, 17)
-                    }
-                });
-                
-                // Обробник кліку по прапорцю
-                flagMarker.addListener("click", () => {
-                    if (currentInfoWindow) {
-                        currentInfoWindow.close();
-                    }
-                    const infoWindow = new google.maps.InfoWindow({
-                        content: `
-                            <div class="info-window">
-                                <h5>${territory.name}</h5>
-                                <p><strong>Рівень небезпеки:</strong> ${territory.dangerLevel}</p>
-                                <p><strong>Статус:</strong> ${territory.status}</p>
-                                <p><strong>Площа:</strong> ${territory.affectedArea}</p>
-                                <p>${territory.description}</p>
-                                <p><em>${territory.notes}</em></p>
-                                <div class="mt-2">
-                                    <button class="btn btn-sm btn-warning demine-territory-flag" 
-                                        data-territory-id="${territory.id}">
-                                        Розпочати розмінування
-                                    </button>
-                                </div>
-                            </div>
-                        `
-                    });
-                    infoWindow.open(map, flagMarker);
-                    currentInfoWindow = infoWindow;
-                    
-                    // Додаємо обробник для кнопки розмінування
-                    setTimeout(() => {
-                        const demineButton = document.querySelector('.demine-territory-flag');
-                        if (demineButton) {
-                            demineButton.addEventListener('click', () => {
-                                const territoryId = demineButton.getAttribute('data-territory-id');
-                                startDeminingProcess(territoryId);
-                            });
-                        }
-                    }, 100);
-                });
-                
-                markers.push(flagMarker);
-            }
-        }
-
-        // Розрахунок радіусу кола на основі площі
-        function calculateCircleRadius(areaString) {
-            // Конвертуємо рядок площі в число (кв. км)
-            const areaMatch = areaString.match(/(\d+(?:\.\d+)?)/);
-            if (!areaMatch) return 5000; // За замовчуванням 5 км
-
-            const areaKm2 = parseFloat(areaMatch[1]);
-            
-            // Формула для розрахунку радіусу кола з його площі
-            // Площа кола = πr²
-            // r = √(Площа/π)
-            const radiusKm = Math.sqrt(areaKm2 / Math.PI);
-            
-            // Перетворюємо км в метри для Google Maps
-            return radiusKm * 1000;
-        }
-
-        // Отримання кольору залежно від рівня небезпеки
-        function getDangerLevelColor(dangerLevel) {
-            switch (dangerLevel) {
-                case "Критичний":
-                    return "#FF0000"; // Червоний
-                case "Високий":
-                    return "#FF3300"; // Оранжево-червоний
-                case "Середній":
-                    return "#FF9900"; // Оранжевий
-                case "Низький":
-                    return "#FFCC00"; // Жовтий
-                case "Мінімальний":
-                    return "#66CC00"; // Світло-зелений
-                default:
-                    return "#FFCC00"; // За замовчуванням жовтий
-            }
-        }
-        
-        // Функція для початку процесу розмінування
-        function startDeminingProcess(territoryId) {
-            // Знаходимо територію за ID
-            const territory = minedTerritories.find(t => t.id == territoryId);
-            if (!territory) return;
-            
-            // Отримуємо або створюємо модальне вікно
-            let modal = document.getElementById('deminingModal');
-            if (!modal) {
-                // Створюємо нове модальне вікно
-                modal = document.createElement('div');
-                modal.className = 'modal fade';
-                modal.id = 'deminingModal';
-                modal.tabIndex = '-1';
-                modal.innerHTML = `
-                    <div class="modal-dialog">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title">Розмінування території</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                            </div>
-                            <div class="modal-body">
-                                <p>Ви розпочинаєте процес розмінування території:</p>
-                                <div id="territoryInfo" class="alert alert-danger mb-3">
-                                    <!-- Заповнюється динамічно -->
-                                </div>
-                                <form id="deminingForm">
-                                    <input type="hidden" id="deminingTerritoryId">
-                                    <div class="mb-3">
-                                        <label for="estimatedTime" class="form-label">Орієнтовний час розмінування (днів)</label>
-                                        <input type="number" class="form-control" id="estimatedTime" min="1" value="30">
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="teamSize" class="form-label">Розмір команди</label>
-                                        <input type="number" class="form-control" id="teamSize" min="1" value="5">
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="equipment" class="form-label">Необхідне обладнання</label>
-                                        <textarea class="form-control" id="equipment" rows="3">Міношукачі, захисне спорядження, транспорт</textarea>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="notes" class="form-label">Додаткові нотатки</label>
-                                        <textarea class="form-control" id="notes" rows="3"></textarea>
-                                    </div>
-                                </form>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
-                                <button type="button" class="btn btn-warning" id="startDeminingBtn">Розпочати розмінування</button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                document.body.appendChild(modal);
-                
-                // Додаємо обробник для кнопки розмінування
-                document.getElementById('startDeminingBtn').addEventListener('click', confirmDemining);
-            }
-            
-            // Заповнюємо інформацію про територію
-            document.getElementById('deminingTerritoryId').value = territory.id;
-            document.getElementById('territoryInfo').innerHTML = `
-                <strong>${territory.name}</strong><br>
-                Рівень небезпеки: ${territory.dangerLevel}<br>
-                Площа: ${territory.affectedArea}<br>
-                ${territory.description}
-            `;
-            
-            // Показуємо модальне вікно
-            const modalInstance = new bootstrap.Modal(modal);
-            modalInstance.show();
-        }
-        
-        // Підтвердження розмінування
-        function confirmDemining() {
-            const territoryId = document.getElementById('deminingTerritoryId').value;
-            const estimatedTime = document.getElementById('estimatedTime').value;
-            const teamSize = document.getElementById('teamSize').value;
-            const equipment = document.getElementById('equipment').value;
-            const notes = document.getElementById('notes').value;
-            
-            // В реальному додатку тут був би запит до API для початку процесу розмінування
-            
-            // Закриваємо модальне вікно
-            const modal = bootstrap.Modal.getInstance(document.getElementById('deminingModal'));
-            modal.hide();
-            
-            // Показуємо повідомлення про початок розмінування
-            alert(`Процес розмінування території розпочато. Орієнтовний час: ${estimatedTime} днів`);
-        }
-
-        // Модифікуємо функцію ініціалізації карти
-        let originalInitMap = initMap;
-        initMap = function() {
-            // Викликаємо оригінальну функцію ініціалізації
-            if (typeof originalInitMap === 'function') {
-                originalInitMap();
-            } else {
-                // На випадок, якщо оригінальної функції немає
-                initializeMap();
-            }
-            
-            // Додаємо заміновані території
-            addMinedTerritories();
-            
-            // Додаємо обробник клацання на карті для форми повідомлення
-            map.addListener('click', function(event) {
-                // Запам'ятовуємо координати
-                currentLatLng = event.latLng;
-                
-                // Заповнюємо координати в формі повідомлення про небезпеку
-                document.getElementById('latitude').value = event.latLng.lat();
-                document.getElementById('longitude').value = event.latLng.lng();
-                
-                // Відкриваємо модальне вікно для повідомлення про небезпеку
-                const reportModal = new bootstrap.Modal(document.getElementById('reportModal'));
-                reportModal.show();
-            });
-            
-            // Кнопка повідомлення про небезпеку
-            document.getElementById('reportDangerBtn').addEventListener('click', function() {
-                const reportModal = new bootstrap.Modal(document.getElementById('reportModal'));
-                reportModal.show();
-            });
-            
-            // Обробник для відправки форми повідомлення
-            document.getElementById('submitReport').addEventListener('click', submitDangerReport);
-            
-            // Завантажуємо регіони для форми
-            fetch('/api/regions')
-                .then(response => response.json())
-                .then(data => {
-                    populateRegionsDropdown(data);
-                })
-                .catch(error => console.error('Помилка завантаження регіонів:', error));
-        };
-
-        // Заповнення випадаючого списку регіонів
-        function populateRegionsDropdown(regions) {
-            const regionSelect = document.getElementById('region');
-            regionSelect.innerHTML = '';
-            
-            // Додавання опцій для всіх регіонів
-            regions.forEach(region => {
-                const option = document.createElement('option');
-                option.value = region.id;
-                option.textContent = region.name;
-                regionSelect.appendChild(option);
-            });
-        }
-        
-        // Функція відправки форми повідомлення про небезпеку
-        async function submitDangerReport() {
-            try {
-                // Отримання даних з форми
-                const title = document.getElementById('title').value;
-                const description = document.getElementById('description').value;
-                const latitude = parseFloat(document.getElementById('latitude').value);
-                const longitude = parseFloat(document.getElementById('longitude').value);
-                const regionId = parseInt(document.getElementById('region').value);
-                const status = document.getElementById('status').value;
-                const priority = document.getElementById('priority').value;
-                
-                // Перевірка обов'язкових полів
-                if (!title || isNaN(latitude) || isNaN(longitude) || isNaN(regionId)) {
-                    alert('Будь ласка, заповніть всі обов\'язкові поля.');
-                    return;
-                }
-                
-                // Створення даних для відправки
-                const reportData = {
-                    title: title,
-                    description: description,
-                    latitude: latitude,
-                    longitude: longitude,
-                    status: status,
-                    priority: priority,
-                    region_id: regionId
-                };
-                
-                // Відправка запиту на сервер
-                const response = await fetch('/api/explosive-objects', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(reportData)
-                });
-                
-                // Обробка відповіді
-                if (!response.ok) {
-                    let errorMessage = `Помилка сервера: ${response.status} ${response.statusText}`;
-                    
-                    try {
-                        // Намагаємося отримати текст помилки
-                        const responseText = await response.text();
-                        
-                        // Перевіряємо, чи є відповідь валідним JSON
-                        try {
-                            const errorData = JSON.parse(responseText);
-                            errorMessage = errorData.detail || errorData.message || errorMessage;
-                        } catch (jsonError) {
-                            // Якщо не можемо розібрати як JSON, використовуємо текст як є
-                            if (responseText && responseText.length < 100) {
-                                errorMessage = responseText;
-                            }
-                        }
-                    } catch (textError) {
-                        console.error('Не вдалося отримати текст помилки:', textError);
-                    }
-                    
-                    throw new Error(errorMessage);
-                }
-                
-                // Отримання даних про створений об'єкт
-                const createdObject = await response.json();
-                console.log('Об\'єкт успішно створено:', createdObject);
-                
-                // Очищення форми
-                document.getElementById('title').value = '';
-                document.getElementById('description').value = '';
-                document.getElementById('latitude').value = '';
-                document.getElementById('longitude').value = '';
-                
-                // Закриття модального вікна
-                const modal = bootstrap.Modal.getInstance(document.getElementById('reportModal'));
-                modal.hide();
-                
-                // Додавання нового об'єкта до масиву та оновлення карти
-                explosiveObjects.push(createdObject);
-                renderObjects();
-                addMarkersToMap();
-                
-                // Показати повідомлення про успіх
-                alert('Повідомлення про небезпеку успішно надіслано.');
-                
-            } catch (error) {
-                console.error('Помилка при відправці повідомлення:', error);
-                alert(`Помилка: ${error.message}`);
-            }
-        }
     </script>
 </body>
 </html> 
