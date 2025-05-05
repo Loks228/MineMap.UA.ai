@@ -1005,23 +1005,30 @@ function exportData() {
 
 // Функция для отображения уведомлений
 function showAlert(type, message) {
-    // Создаем элемент уведомления
+    // Remove any existing alerts
+    document.querySelectorAll('.alert-floating').forEach(alert => {
+        alert.remove();
+    });
+    
+    // Create a new alert element
     const alertElement = document.createElement('div');
-    alertElement.className = `alert alert-${type} alert-dismissible fade show`;
-    alertElement.role = 'alert';
-    alertElement.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    `;
+    alertElement.className = `alert alert-${type} alert-floating`;
+    alertElement.innerHTML = message;
     
-    // Добавляем уведомление на страницу
-    const container = document.querySelector('.admin-controls');
-    container.prepend(alertElement);
+    // Determine the container to append the alert to
+    const container = document.querySelector('.object-list');
+    if (container) {
+        container.prepend(alertElement);
+    } else {
+        document.body.appendChild(alertElement);
+    }
     
-    // Автоматически скрываем уведомление через 5 секунд
+    // Auto-hide the alert after 5 seconds
     setTimeout(() => {
-        const bsAlert = bootstrap.Alert.getOrCreateInstance(alertElement);
-        bsAlert.close();
+        alertElement.classList.add('fade-out');
+        setTimeout(() => {
+            alertElement.remove();
+        }, 500);
     }, 5000);
 }
 
@@ -1337,23 +1344,42 @@ function setupCoordinateListeners() {
 
 // Add toggle functionality for admin panel
 document.addEventListener('DOMContentLoaded', () => {
-    const togglePanelBtn = document.getElementById('togglePanelBtn');
-    const adminPanel = document.querySelector('.admin-controls');
+    const toggleListBtn = document.getElementById('toggleListBtn');
+    const restoreListBtn = document.getElementById('restoreListBtn');
+    const adminPanel = document.querySelector('.object-list');
     
-    if (togglePanelBtn && adminPanel) {
-        togglePanelBtn.addEventListener('click', () => {
+    if (toggleListBtn && adminPanel) {
+        toggleListBtn.addEventListener('click', () => {
             adminPanel.classList.toggle('collapsed');
             
             // Store the state in localStorage to persist across page reloads
             const isCollapsed = adminPanel.classList.contains('collapsed');
             localStorage.setItem('adminPanelCollapsed', isCollapsed);
+            
+            // If panel is collapsed, show restore button
+            if (isCollapsed) {
+                restoreListBtn.classList.remove('d-none');
+            } else {
+                restoreListBtn.classList.add('d-none');
+            }
         });
         
         // Check if there's a saved state in localStorage
         const savedState = localStorage.getItem('adminPanelCollapsed');
         if (savedState === 'true') {
             adminPanel.classList.add('collapsed');
+            restoreListBtn.classList.remove('d-none');
+        } else {
+            restoreListBtn.classList.add('d-none');
         }
+    }
+    
+    if (restoreListBtn && adminPanel) {
+        restoreListBtn.addEventListener('click', () => {
+            adminPanel.classList.remove('collapsed');
+            restoreListBtn.classList.add('d-none');
+            localStorage.setItem('adminPanelCollapsed', 'false');
+        });
     }
     
     // Set up filter handlers

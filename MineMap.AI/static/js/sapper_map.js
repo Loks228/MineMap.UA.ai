@@ -245,24 +245,51 @@ async function initData() {
 
 // ... existing code rest remains unchanged ...
 
-// Add toggle functionality for admin panel
-document.addEventListener('DOMContentLoaded', () => {
-    const togglePanelBtn = document.getElementById('togglePanelBtn');
-    const adminPanel = document.querySelector('.admin-controls');
+// Обработчики для интерфейса карты сапера
+document.addEventListener('DOMContentLoaded', function() {
+    // Обработчик для панели инструментов
+    const toggleListBtn = document.getElementById('toggleListBtn');
+    const restoreListBtn = document.getElementById('restoreListBtn');
+    const objectList = document.querySelector('.admin-controls');
     
-    if (togglePanelBtn && adminPanel) {
-        togglePanelBtn.addEventListener('click', () => {
-            adminPanel.classList.toggle('collapsed');
+    // Сразу скрываем кнопку восстановления при загрузке страницы,
+    // если панель открыта
+    if (restoreListBtn && !objectList.classList.contains('collapsed')) {
+        restoreListBtn.classList.add('d-none');
+    }
+    
+    if (toggleListBtn && objectList) {
+        toggleListBtn.addEventListener('click', function() {
+            objectList.classList.add('collapsed');
             
-            // Store the state in localStorage to persist across page reloads
-            const isCollapsed = adminPanel.classList.contains('collapsed');
-            localStorage.setItem('adminPanelCollapsed', isCollapsed);
+            // Если панель скрыта, показываем кнопку восстановления
+            if (restoreListBtn) {
+                restoreListBtn.classList.remove('d-none');
+            }
+            
+            // Сохраняем состояние в localStorage
+            localStorage.setItem('sapperPanelCollapsed', true);
         });
         
-        // Check if there's a saved state in localStorage
-        const savedState = localStorage.getItem('adminPanelCollapsed');
+        // Проверяем сохраненное состояние
+        const savedState = localStorage.getItem('sapperPanelCollapsed');
         if (savedState === 'true') {
-            adminPanel.classList.add('collapsed');
+            objectList.classList.add('collapsed');
+            if (restoreListBtn) {
+                restoreListBtn.classList.remove('d-none');
+            }
+        } else if (restoreListBtn) {
+            // Если панель открыта, скрываем кнопку восстановления
+            restoreListBtn.classList.add('d-none');
         }
+    }
+    
+    if (restoreListBtn && objectList) {
+        restoreListBtn.addEventListener('click', function(e) {
+            e.preventDefault(); // Предотвращаем стандартное поведение ссылки
+            objectList.classList.remove('collapsed');
+            restoreListBtn.classList.add('d-none');
+            localStorage.setItem('sapperPanelCollapsed', false);
+        });
     }
 }); 
