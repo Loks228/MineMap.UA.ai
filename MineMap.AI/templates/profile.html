@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Профіль користувача - MineMap.UA.ai</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 70px;
+            background-color: #f8f9fa;
+        }
+        .nav-tabs .nav-link {
+            color: #495057;
+        }
+        .nav-tabs .nav-link.active {
+            color: #007bff;
+            font-weight: 500;
+        }
+        .profile-header {
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .profile-avatar {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #fff;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        }
+        .profile-section {
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .activity-item {
+            border-left: 3px solid #007bff;
+            padding-left: 15px;
+            margin-bottom: 15px;
+            position: relative;
+        }
+        .activity-item::before {
+            content: '';
+            width: 12px;
+            height: 12px;
+            background-color: #007bff;
+            border-radius: 50%;
+            position: absolute;
+            left: -7px;
+            top: 0;
+        }
+        .login-history-item {
+            border-bottom: 1px solid #e9ecef;
+            padding: 10px 0;
+        }
+        .login-history-item:last-child {
+            border-bottom: none;
+        }
+        .verified-badge {
+            color: #28a745;
+            font-size: 16px;
+        }
+        .api-key {
+            font-family: monospace;
+            background-color: #f8f9fa;
+            padding: 8px;
+            border-radius: 4px;
+            word-break: break-all;
+        }
+        /* Стили для индикатора загрузки аватара */
+        .profile-avatar.uploading {
+            opacity: 0.5;
+            filter: blur(2px);
+            transition: all 0.3s ease;
+        }
+        /* Анимация для аватара при обновлении */
+        @keyframes avatarPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .profile-avatar {
+            transition: transform 0.3s ease;
+        }
+        .profile-avatar:not(.uploading):hover {
+            animation: avatarPulse 1s ease infinite;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="/">MineMap.UA.ai</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    {% if user.role == 'admin' or user.role == 'moderator' %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="/map/admin">Карта Адміністратор</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/admin/panel">Адмін-панель</a>
+                    </li>
+                    {% elif user.role == 'citizen' %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="/map/citizen">Карта Громадянин</a>
+                    </li>
+                    {% elif user.role == 'sapper' %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="/map/sapper">Карта Сапер</a>
+                    </li>
+                    {% endif %}
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/profile">
+                            <i class="bi bi-person-circle"></i> Профіль
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/logout">
+                            <i class="bi bi-box-arrow-right"></i> Вихід
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container">
+        <!-- Profile Header -->
+        <div class="profile-header row align-items-center">
+            <div class="col-md-2 text-center">
+                <img src="{{ user.avatar_url or '/static/images/default-avatar.png' }}" alt="Avatar" class="profile-avatar" id="user-avatar">
+            </div>
+            <div class="col-md-10">
+                <h2>{{ user.full_name or user.username }}</h2>
+                <p class="text-muted">
+                    <span class="badge bg-{{ 'primary' if user.role == 'admin' else 'success' if user.role == 'moderator' else 'info' if user.role == 'sapper' else 'secondary' }}">
+                        {{ user.role|capitalize }}
+                    </span>
+                    <span class="ms-2">{{ user.email }}</span>
+                    {% if user.email_verified %}
+                        <i class="bi bi-patch-check-fill verified-badge ms-1" title="Email підтверджено"></i>
+                    {% endif %}
+                </p>
+                <p>Акаунт створено: <span class="fw-bold">
+                    {% if user.created_at %}
+                        {% if user.created_at is string %}
+                            {{ user.created_at }}
+                        {% else %}
+                            {{ user.created_at.strftime('%d.%m.%Y %H:%M') }}
+                        {% endif %}
+                    {% else %}
+                        Дата не вказана
+                    {% endif %}
+                </span></p>
+            </div>
+        </div>
+
+        <!-- Profile Tabs -->
+        <ul class="nav nav-tabs mb-4" id="profileTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="personal-tab" data-bs-toggle="tab" data-bs-target="#personal" type="button" role="tab">
+                    <i class="bi bi-person"></i> Особисті дані
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="security-tab" data-bs-toggle="tab" data-bs-target="#security" type="button" role="tab">
+                    <i class="bi bi-shield-lock"></i> Безпека
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="activity-tab" data-bs-toggle="tab" data-bs-target="#activity" type="button" role="tab">
+                    <i class="bi bi-clock-history"></i> Історія
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="notifications-tab" data-bs-toggle="tab" data-bs-target="#notifications" type="button" role="tab">
+                    <i class="bi bi-bell"></i> Сповіщення
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="api-tab" data-bs-toggle="tab" data-bs-target="#api" type="button" role="tab">
+                    <i class="bi bi-code-slash"></i> API
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab Content -->
+        <div class="tab-content" id="profileTabsContent">
+            <!-- Personal Data Tab -->
+            <div class="tab-pane fade show active" id="personal" role="tabpanel" aria-labelledby="personal-tab">
+                <div class="profile-section">
+                    <h3>Редагування особистих даних</h3>
+                    <form id="personalDataForm">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="fullName" class="form-label">Повне ім'я</label>
+                                <input type="text" class="form-control" id="fullName" value="{{ user.full_name }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="username" class="form-label">Ім'я користувача</label>
+                                <input type="text" class="form-control" id="username" value="{{ user.username }}" readonly>
+                                <div class="form-text">Ім'я користувача не можна змінити</div>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="email" class="form-label">Email</label>
+                                <div class="input-group">
+                                    <input type="email" class="form-control" id="email" value="{{ user.email }}">
+                                    <button class="btn btn-outline-primary" type="button" id="verifyEmailBtn">Перевірити</button>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="phone" class="form-label">Телефон</label>
+                                <div class="input-group">
+                                    <input type="tel" class="form-control" id="phone" value="{{ user.phone }}">
+                                    <button class="btn btn-outline-primary" type="button" id="verifyPhoneBtn">Перевірити</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary">Зберегти зміни</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Security Tab -->
+            <div class="tab-pane fade" id="security" role="tabpanel" aria-labelledby="security-tab">
+                <div class="profile-section mb-4">
+                    <h3>Зміна пароля</h3>
+                    <form id="changePasswordForm">
+                        <div class="mb-3">
+                            <label for="currentPassword" class="form-label">Поточний пароль</label>
+                            <input type="password" class="form-control" id="currentPassword" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="newPassword" class="form-label">Новий пароль</label>
+                            <input type="password" class="form-control" id="newPassword" required>
+                            <div class="progress mt-2" style="height: 5px;">
+                                <div class="progress-bar" id="passwordStrength" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <div class="form-text" id="passwordFeedback">Використовуйте комбінацію літер, цифр і спеціальних символів</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="confirmPassword" class="form-label">Підтвердження пароля</label>
+                            <input type="password" class="form-control" id="confirmPassword" required>
+                            <div class="form-text" id="confirmFeedback"></div>
+                        </div>
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary">Змінити пароль</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="profile-section">
+                    <h3>Двофакторна аутентифікація (2FA)</h3>
+                    <div class="mb-4">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="enable2FA">
+                            <label class="form-check-label" for="enable2FA">Увімкнути двофакторну аутентифікацію</label>
+                        </div>
+                        <div class="form-text">Підвищить безпеку вашого акаунту</div>
+                    </div>
+
+                    <div id="twoFactorSetup" style="display: none;">
+                        <div class="alert alert-info">
+                            <h5>Налаштування двофакторної аутентифікації</h5>
+                            <ol>
+                                <li>Встановіть Google Authenticator на свій телефон</li>
+                                <li>Відскануйте QR-код або введіть секретний ключ вручну</li>
+                                <li>Введіть 6-значний код із програми для підтвердження</li>
+                            </ol>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 text-center">
+                                <div id="qrCode" class="mb-3 p-3 bg-light d-inline-block">
+                                    <!-- QR код буде тут -->
+                                    <img src="" id="qrCodeImage" alt="QR код" style="display: none;">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="secretKey" class="form-label">Секретний ключ</label>
+                                    <input type="text" class="form-control text-center" id="secretKey" readonly>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="verificationCode" class="form-label">Код підтвердження</label>
+                                    <input type="text" class="form-control" id="verificationCode" placeholder="Введіть 6-значний код">
+                                </div>
+                                <div class="d-grid">
+                                    <button type="button" class="btn btn-success" id="verifyTwoFactorBtn">Підтвердити і активувати</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="twoFactorActive" style="display: none;">
+                        <div class="alert alert-success">
+                            <i class="bi bi-shield-check"></i> Двофакторна аутентифікація активна
+                        </div>
+                        <p>Ви можете деактивувати двофакторну аутентифікацію, але це знизить безпеку вашого акаунта.</p>
+                        <button type="button" class="btn btn-outline-danger" id="disable2FABtn">Деактивувати 2FA</button>
+                    </div>
+                </div>
+
+                <div class="profile-section mt-4">
+                    <h3>Видалення акаунту</h3>
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle"></i> Увага! Видалення акаунту є незворотною дією. 
+                        Всі ваші дані будуть повністю видалені з системи.
+                    </div>
+                    <div class="d-grid gap-2 col-md-6 mx-auto">
+                        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteAccountModal">
+                            Видалити акаунт
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity History Tab -->
+            <div class="tab-pane fade" id="activity" role="tabpanel" aria-labelledby="activity-tab">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="profile-section">
+                            <h3>Історія входів</h3>
+                            <div id="loginHistory">
+                                <div class="login-history-item">
+                                    <p><strong><i class="bi bi-calendar-check"></i> {{ user.last_login }}</strong></p>
+                                    <p><i class="bi bi-geo-alt"></i> Kyiv, Ukraine ({{ user.last_ip }})</p>
+                                    <p><i class="bi bi-laptop"></i> Chrome on Windows</p>
+                                </div>
+                                <!-- Історія буде заповнюватися за допомогою JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="profile-section">
+                            <h3>Дії в системі</h3>
+                            <div id="activityHistory">
+                                <!-- Історія активності буде заповнюватися за допомогою JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notifications Tab -->
+            <div class="tab-pane fade" id="notifications" role="tabpanel" aria-labelledby="notifications-tab">
+                <div class="profile-section">
+                    <h3>Налаштування сповіщень</h3>
+                    <form id="notificationsForm">
+                        <div class="mb-4">
+                            <h5>Email сповіщення</h5>
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="emailNewObjects" checked>
+                                <label class="form-check-label" for="emailNewObjects">Нові об'єкти в системі</label>
+                            </div>
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="emailStatusChanges" checked>
+                                <label class="form-check-label" for="emailStatusChanges">Зміни статусу об'єктів</label>
+                            </div>
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="emailSecurityAlerts" checked>
+                                <label class="form-check-label" for="emailSecurityAlerts">Сповіщення безпеки</label>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <h5>Push-сповіщення</h5>
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="pushNewObjects">
+                                <label class="form-check-label" for="pushNewObjects">Нові об'єкти в системі</label>
+                            </div>
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="pushStatusChanges">
+                                <label class="form-check-label" for="pushStatusChanges">Зміни статусу об'єктів</label>
+                            </div>
+                            <div class="form-check form-switch mb-2">
+                                <input class="form-check-input" type="checkbox" id="pushSecurityAlerts">
+                                <label class="form-check-label" for="pushSecurityAlerts">Сповіщення безпеки</label>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="btn btn-primary">Зберегти налаштування</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- API Keys Tab -->
+            <div class="tab-pane fade" id="api" role="tabpanel" aria-labelledby="api-tab">
+                <div class="profile-section">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h3>API Ключі</h3>
+                        <button type="button" class="btn btn-primary" id="generateApiKeyBtn">
+                            <i class="bi bi-plus-circle"></i> Створити новий ключ
+                        </button>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> API ключі надають доступ до даних системи через API. 
+                        Зберігайте їх в безпечному місці та не передавайте третім особам.
+                    </div>
+
+                    <div id="apiKeys">
+                        <!-- API ключі будуть відображатися тут -->
+                    </div>
+                </div>
+
+                <div class="profile-section mt-4">
+                    <h3>Технічна підтримка</h3>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="bi bi-envelope"></i> Email підтримка</h5>
+                                    <p class="card-text">Напишіть нам на email для технічних питань або проблем з API:</p>
+                                    <a href="mailto:support@minemap.ua.ai" class="btn btn-outline-primary">support@minemap.ua.ai</a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="bi bi-chat-dots"></i> Чат підтримка</h5>
+                                    <p class="card-text">Отримайте миттєву допомогу через чат із нашою командою:</p>
+                                    <button class="btn btn-outline-success" id="startChatBtn">Почати чат</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Account Modal -->
+    <div class="modal fade" id="deleteAccountModal" tabindex="-1" aria-labelledby="deleteAccountModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="deleteAccountModalLabel">Підтвердження видалення акаунту</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Ви впевнені, що хочете видалити свій акаунт? Це призведе до видалення:</p>
+                    <ul>
+                        <li>Всіх ваших особистих даних</li>
+                        <li>Історії дій та входів</li>
+                        <li>Створених вами об'єктів</li>
+                    </ul>
+                    <p class="text-danger"><strong>Ця дія є незворотною!</strong></p>
+                    <div class="mb-3">
+                        <label for="deleteConfirmPassword" class="form-label">Введіть пароль для підтвердження</label>
+                        <input type="password" class="form-control" id="deleteConfirmPassword" required>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="deleteConfirmCheck" required>
+                        <label class="form-check-label" for="deleteConfirmCheck">
+                            Я розумію, що ця дія не може бути скасована
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="button" class="btn btn-danger" id="confirmDeleteAccount">Видалити акаунт</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generate API Key Modal -->
+    <div class="modal fade" id="generateApiKeyModal" tabindex="-1" aria-labelledby="generateApiKeyModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="generateApiKeyModalLabel">Створення нового API ключа</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="apiKeyName" class="form-label">Назва ключа</label>
+                        <input type="text" class="form-control" id="apiKeyName" placeholder="Наприклад: Мобільний додаток">
+                    </div>
+                    <div class="mb-3">
+                        <label for="apiKeyExpiration" class="form-label">Термін дії</label>
+                        <select class="form-select" id="apiKeyExpiration">
+                            <option value="30">30 днів</option>
+                            <option value="90">90 днів</option>
+                            <option value="180">180 днів</option>
+                            <option value="365">1 рік</option>
+                            <option value="0">Необмежений</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Дозволи</label>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="permissionRead" checked>
+                            <label class="form-check-label" for="permissionRead">Читання даних</label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="permissionWrite">
+                            <label class="form-check-label" for="permissionWrite">Запис даних</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="permissionDelete">
+                            <label class="form-check-label" for="permissionDelete">Видалення даних</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="button" class="btn btn-primary" id="confirmGenerateApiKey">Створити ключ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/profile.js"></script>
+</body>
+</html> 

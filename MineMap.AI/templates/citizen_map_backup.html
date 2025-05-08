@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Громадянська карта | MineMap.UA</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #map {
+            height: calc(100vh - 56px);
+            width: 100%;
+        }
+        .navbar {
+            background-color: #343a40;
+        }
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .status-legend {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            gap: 15px;
+            z-index: 1000;
+        }
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+        .status-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+        .red { background-color: #ef4444; }
+        .yellow { background-color: #f59e0b; }
+        .gray { background-color: #6b7280; }
+        .green { background-color: #10b981; }
+        .map-controls {
+            position: absolute;
+            top: 80px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 1000;
+        }
+        .map-control-btn {
+            width: 40px;
+            height: 40px;
+            background-color: white;
+            border: none;
+            border-radius: 4px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .map-control-btn:hover {
+            background-color: #f8f9fa;
+        }
+        .report-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            z-index: 1000;
+            padding: 10px 20px;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            border-radius: 30px;
+            transition: all 0.3s ease;
+        }
+        .report-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.4);
+        }
+        .user-role-badge {
+            background-color: #28a745;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            margin-left: 10px;
+        }
+
+        .border-danger {
+            border-radius: 10px;
+        }
+            /* .border-danger:hover {
+            border: 1px solid blue;
+            } */
+        .object-list {
+            position: absolute;
+            top: 150px;
+            left: 10px;
+            width: 300px;
+            max-height: calc(100vh - 130px);
+            overflow-y: auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            z-index: 1000;
+        }
+        .object-item {
+            padding: 10px;
+            border-bottom: 1px solid #e9ecef;
+            cursor: pointer;
+        }
+        .object-item:hover {
+            background-color: #f8f9fa;
+        }
+        .object-info {
+            margin-top: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .priority-high {
+            background-color: #dc3545;
+            color: white;
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .priority-medium {
+            background-color: #fd7e14;
+            color: white;
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .priority-low {
+            background-color: #20c997;
+            color: white;
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        
+        /* Custom modal styling */
+        .modal-dialog {
+            --bs-modal-margin: 0.5rem;
+            margin: var(--bs-modal-margin);
+        }
+        
+        .modal-content {
+            --bs-modal-padding: 0.5rem;
+            padding: 0;
+        }
+        
+        .modal-body {
+            padding: var(--bs-modal-padding);
+            overflow-y: hidden;
+            max-height: none;
+        }
+        
+        .modal-header, .modal-footer {
+            padding: var(--bs-modal-padding);
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-exclamation-triangle-fill" viewBox="0 0 16 16">
+                    <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+                </svg>
+                Система інформування про вибухонебезпечні предмети
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/map/citizen">Карта <span class="user-role-badge">Громадянин</span></a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/profile">Профіль</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/logout">Вихід</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div id="map"></div>
+
+    <div class="object-list">
+        <h6>Останні повідомлення</h6>
+        <div class="form-group mb-3">
+            <select class="form-select form-select-sm" id="filterStatus">
+                <option value="all">Всі статуси</option>
+                <option value="mined">Заміновані</option>
+                <option value="unconfirmed">Непідтверджені</option>
+                <option value="demined">Розміновані</option>
+            </select>
+        </div>
+        <div class="form-group mb-3">
+            <select class="form-select form-select-sm" id="filterRegion">
+                <option value="all">Всі регіони</option>
+                <!-- Регіони будуть додані динамічно -->
+            </select>
+        </div>
+        <div id="objectsList">
+            <!-- Will be populated dynamically -->
+        </div>
+    </div>
+
+    <div class="status-legend">
+        <div class="status-item">
+            <div class="status-color red"></div>
+            <span>Замінована</span>
+        </div>
+        <div class="status-item">
+            <div class="status-color yellow"></div>
+            <span>Непідтверджена</span>
+        </div>
+        <div class="status-item">
+            <div class="status-color gray"></div>
+            <span>Архів</span>
+        </div>
+        <div class="status-item">
+            <div class="status-color green"></div>
+            <span>Розмінована</span>
+        </div>
+        <div class="status-item">
+            <div class="status-color border border-danger bg-transparent"></div>
+            <span>Червона зона</span>
+        </div>
+    </div>
+
+    <div class="map-controls">
+        <button class="map-control-btn" id="zoomIn" title="Збільшити">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-lg" viewBox="0 0 16 16">
+                <path d="M8 0a1 1 0 0 1 1 1v6h6a1 1 0 1 1 0 2H9v6a1 1 0 1 1-2 0V9H1a1 1 0 0 1 0-2h6V1a1 1 0 0 1 1-1z"/>
+            </svg>
+        </button>
+        <button class="map-control-btn" id="zoomOut" title="Зменшити">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-dash-lg" viewBox="0 0 16 16">
+                <path d="M0 8a1 1 0 0 1 1-1h14a1 1 0 1 1 0 2H1a1 1 0 0 1-1-1z"/>
+            </svg>
+        </button>
+        <button class="map-control-btn" id="layers" title="Шари">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layers" viewBox="0 0 16 16">
+                <path d="M8.235 1.559a.5.5 0 0 0-.47 0l-7.5 4a.5.5 0 0 0 0 .882L3.188 8 .264 9.559a.5.5 0 0 0 0 .882l7.5 4a.5.5 0 0 0 .47 0l7.5-4a.5.5 0 0 0 0-.882L12.813 8l2.922-1.559a.5.5 0 0 0 0-.882l-7.5-4zm3.515 7.008L14.438 10 8 13.433 1.562 10 4.25 8.567l3.515 1.874a.5.5 0 0 0 .47 0l3.515-1.874zM8 9.433 1.562 6 8 2.567 14.438 6 8 9.433z"/>
+            </svg>
+        </button>
+        <button class="map-control-btn" id="route" title="Маршрут">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-signpost-split" viewBox="0 0 16 16">
+                <path d="M7 7V1.414a1 1 0 0 1 2 0V2h5a1 1 0 0 1 .8.4l.975 1.3a.5.5 0 0 1 0 .6L14.8 5.6a1 1 0 0 1-.8.4H9v10H7v-5H2a1 1 0 0 1-.8-.4L.225 9.3a.5.5 0 0 1 0-.6L1.2 7.4A1 1 0 0 1 2 7h5zm1 3V8H2l-.75 1L2 10h6zm0-5h6l.75-1L14 3H8v2z"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Button to report danger -->
+    <button class="btn btn-danger report-btn" id="reportDangerBtn">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>Повідомити про небезпеку
+    </button>
+
+    <!-- Modal for reporting danger -->
+    <div class="modal fade" id="reportModal" tabindex="-1" aria-labelledby="reportModalLabel" data-bs-backdrop="static" aria-modal="true" role="dialog">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="reportModalLabel">Повідомити про вибухонебезпечний об'єкт</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="text-center mb-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="bi bi-exclamation-triangle-fill text-warning" viewBox="0 0 16 16">
+                            <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+                        </svg>
+                    </div>
+                        <div class="mb-3">
+                            <label class="form-label">Фото ситуації</label>
+                            <div class="camera-wrapper position-relative mb-2" style="width:100%; height:300px; background-color:#000;">
+                                <video id="cameraPreview" style="width:100%; height:100%; object-fit:cover;" autoplay muted></video>
+                                <canvas id="photoCanvas" style="display:none; width:100%; height:100%;"></canvas>
+                                <div id="gpsStatus" class="position-absolute top-0 end-0 p-2 badge bg-warning">Отримання GPS...</div>
+                                <div id="photoCountdown" class="position-absolute top-50 start-50 translate-middle badge bg-danger fs-1" style="display:none;">10</div>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <button type="button" id="startCamera" class="btn btn-sm btn-primary">Увімкнути камеру</button>
+                                <button type="button" id="takePhoto" class="btn btn-sm btn-success" disabled>Зробити фото</button>
+                                <button type="button" id="retakePhoto" class="btn btn-sm btn-secondary" style="display:none;">Перезняти</button>
+                            </div>
+                            <input type="hidden" id="photoData" name="photoData">
+                            <small class="form-text text-muted">
+                                <i class="bi bi-info-circle"></i> Для точного визначення місцезнаходження залишайтесь на місці під час фотографування.
+                            </small>
+                        </div>
+                    <form id="reportForm">
+                        <div class="mb-3">
+                            <label for="title" class="form-label">Назва</label>
+                            <input type="text" class="form-control" id="title" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Опис</label>
+                            <textarea class="form-control" id="description" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="latitude" class="form-label">Широта</label>
+                            <input type="number" step="any" class="form-control" id="latitude" required readonly>
+                            <small class="form-text text-muted">GPS-координати визначаються автоматично</small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="longitude" class="form-label">Довгота</label>
+                            <input type="number" step="any" class="form-control" id="longitude" required readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label for="region" class="form-label">Регіон</label>
+                            <select class="form-select" id="region" required>
+                                <!-- Will be populated dynamically -->
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="button" class="btn btn-warning" id="submitReport">Відправити повідомлення</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/map_utilities.js"></script>
+    <script src="/static/js/danger_reporting.js"></script>
+    <script src="/static/js/citizen_map.js"></script>
+    
+    <script>
+        // Загружаем Google Maps API
+        const apiKey = "{{ google_maps_api_key }}";
+        const apiUrl = apiKey && apiKey !== "YOUR_GOOGLE_MAPS_API_KEY_HERE" && apiKey !== ""
+            ? `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&callback=initGoogleMaps`
+            : `https://maps.googleapis.com/maps/api/js?loading=async&callback=initGoogleMaps`;
+
+        if (!apiKey || apiKey === "YOUR_GOOGLE_MAPS_API_KEY_HERE" || apiKey === "") {
+            console.warn("API-ключ Google Maps не указан. Карта может работать с ограничениями (водяной знак).");
+        }
+
+        // Все, что использует Google Maps API, помещаем в эту функцию
+        function initGoogleMaps() {
+            // Инициализируем карту
+            initMap();
+        }
+        
+        // Создаем скрипт динамически
+        const script = document.createElement('script');
+        script.src = apiUrl;
+        script.async = true;
+        script.defer = true;
+        script.onerror = () => {
+            console.error("Ошибка загрузки Google Maps API. Проверьте подключение к интернету или API-ключ.");
+            const mapElement = document.getElementById("map");
+            if (mapElement) {
+                mapElement.innerHTML = `
+                    <div class="alert alert-danger">
+                        Не удалось загрузить карту. Проверьте подключение к интернету или API-ключ.
+                    </div>`;
+                mapElement.style.height = 'auto';
+            }
+        };
+        document.head.appendChild(script);
+    </script>
+</body>
+</html> 

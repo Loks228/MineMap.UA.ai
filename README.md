@@ -86,7 +86,7 @@ pip install -r MineMap.AI/requirements.txt
 ```
 DATABASE_URL=postgresql://username:password@localhost/dbname
 SECRET_KEY=your_secret_key
-GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+your_google_maps_api_key
 ```
 
 4. Запустить приложение:
@@ -112,3 +112,12 @@ python main.py
 ## Контакты
 
 Для вопросов и сотрудничества, пожалуйста, свяжитесь с нами через [email или другой контакт]. 
+
+🛠️ Поддержка
+Если что-то не работает:
+
+Проверь ключ в .env
+
+Убедись, что включён Maps JavaScript API в Google Cloud Console
+
+Запусти через uvicorn main:app --reload

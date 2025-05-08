@@ -164,6 +164,14 @@
         </button>
     </div>
 
+    <div class="region-filter" style="position: absolute; top: 180px; right: 10px; z-index: 1000; background-color: white; padding: 10px; border-radius: 4px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); width: 200px;">
+        <label for="regionFilter" class="form-label small mb-1">Фільтр за регіоном:</label>
+        <select class="form-select form-select-sm" id="regionFilter">
+            <option value="all">Всі регіони</option>
+            <!-- Регіони будуть додані динамічно -->
+        </select>
+    </div>
+    
     <button class="btn btn-primary add-object-btn" data-bs-toggle="modal" data-bs-target="#addObjectModal">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-lg" viewBox="0 0 16 16">
             <path d="M8 0a1 1 0 0 1 1 1v6h6a1 1 0 1 1 0 2H9v6a1 1 0 1 1-2 0V9H1a1 1 0 0 1 0-2h6V1a1 1 0 0 1 1-1z"/>
@@ -232,7 +240,35 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap" async defer></script>
     <script src="/static/js/map.js"></script>
+    <script>
+        // Загружаем Google Maps API
+        const apiKey = "{{ google_maps_api_key }}";
+        const apiUrl = apiKey && apiKey !== "YOUR_GOOGLE_MAPS_API_KEY_HERE" && apiKey !== ""
+            ? `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&callback=initMap`
+            : `https://maps.googleapis.com/maps/api/js?loading=async&callback=initMap`;
+
+        if (!apiKey || apiKey === "YOUR_GOOGLE_MAPS_API_KEY_HERE" || apiKey === "") {
+            console.warn("API-ключ Google Maps не указан. Карта может работать с ограничениями (водяной знак).");
+        }
+
+        // Создаем скрипт динамически
+        const script = document.createElement('script');
+        script.src = apiUrl;
+        script.async = true;
+        script.defer = true;
+        script.onerror = () => {
+            console.error("Ошибка загрузки Google Maps API. Проверьте подключение к интернету или API-ключ.");
+            const mapElement = document.getElementById("map");
+            if (mapElement) {
+                mapElement.innerHTML = `
+                    <div class="alert alert-danger">
+                        Не удалось загрузить карту. Проверьте подключение к интернету или API-ключ.
+                    </div>`;
+                mapElement.style.height = 'auto';
+            }
+        };
+        document.head.appendChild(script);
+    </script>
 </body>
 </html>

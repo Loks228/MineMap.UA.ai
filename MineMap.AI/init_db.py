@@ -55,6 +55,10 @@ async def init_db():
             priority TEXT NOT NULL,
             region_id INTEGER REFERENCES regions(id),
             reported_by INTEGER REFERENCES users(id),
+            photo_url TEXT,
+            area_size REAL DEFAULT NULL,
+            danger_level TEXT DEFAULT 'Середній',
+            is_cluster BOOLEAN DEFAULT 0,
             reported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );

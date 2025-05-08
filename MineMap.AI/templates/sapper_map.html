@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Карта сапера | MineMap.UA</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <style>
         body {
             margin: 0;
@@ -15,147 +16,106 @@
             height: calc(100vh - 56px);
             width: 100%;
         }
-        .navbar {
-            background-color: #343a40;
-        }
-        .navbar-brand {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+        .gm-fullscreen-control { display: none !important; }
+        .navbar { background-color: #343a40; }
+        .navbar-brand { display: flex; align-items: center; gap: 10px; }
         .status-legend {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: white;
-            padding: 10px 15px;
-            border-radius: 5px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            display: flex;
-            gap: 15px;
-            z-index: 1000;
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background-color: white; padding: 10px 15px; border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; gap: 15px; z-index: 1000;
         }
-        .status-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 12px;
-        }
-        .status-color {
-            width: 16px;
-            height: 16px;
-            border-radius: 3px;
-        }
+        .status-item { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+        .status-color { width: 16px; height: 16px; border-radius: 3px; }
         .purple { background-color: #8b5cf6; }
         .red { background-color: #ef4444; }
         .yellow { background-color: #f59e0b; }
         .gray { background-color: #6b7280; }
         .green { background-color: #10b981; }
-        .map-controls {
+
+        .btn-group-vertical { position: absolute; bottom: 100px; right: 20px; z-index: 1000; }
+        .admin-controls {
+            position: absolute; top: 150px; left: 10px; width: 300px;
+            background-color: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 15px; z-index: 1000;
+            transition: transform 0.3s ease, width 0.3s ease;
+        }
+        .admin-controls.collapsed {
+            transform: translateX(-290px);
+            width: 50px;
+            overflow: hidden;
+            padding: 10px 5px;
+        }
+        .toggle-panel-btn {
             position: absolute;
-            top: 80px;
             right: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            z-index: 1000;
-        }
-        .map-control-btn {
-            width: 40px;
-            height: 40px;
-            background-color: white;
+            top: 10px;
+            background: none;
             border: none;
-            border-radius: 4px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            font-size: 16px;
             cursor: pointer;
+            padding: 5px;
+            color: #6c757d;
+            z-index: 1001;
         }
-        .map-control-btn:hover {
-            background-color: #f8f9fa;
+        .collapsed .toggle-panel-btn {
+            right: 5px;
+            transform: rotate(180deg);
         }
-        .action-btn {
-            position: absolute;
-            bottom: 100px;
-            right: 20px;
-            z-index: 1000;
-        }
-        .add-object-btn {
-            bottom: 160px;
-        }
-        #addObjectModal .modal-body, #updateStatusModal .modal-body {
-            max-height: 70vh;
-            overflow-y: auto;
+        .collapsed .panel-content {
+            display: none;
         }
         .user-role-badge {
-            background-color: #dc3545;
-            color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            margin-left: 10px;
+            background-color: #dc3545; color: white; padding: 2px 8px; border-radius: 12px;
+            font-size: 0.8rem; margin-left: 10px;
         }
-        .priority-high {
-            background-color: #dc3545;
-            color: white;
-            font-weight: bold;
-            padding: 2px 8px;
-            border-radius: 4px;
+        .object-item { padding: 10px; border-bottom: 1px solid #e9ecef; cursor: pointer; }
+        .object-item:hover { background-color: #f8f9fa; }
+        .priority-badge {
+            font-size: 0.7rem; padding: 0.2em 0.6em; border-radius: 10px;
         }
-        .priority-medium {
-            background-color: #fd7e14;
-            color: white;
-            font-weight: bold;
-            padding: 2px 8px;
-            border-radius: 4px;
+        .high { background-color: #dc3545; color: white; }
+        .medium { background-color: #fd7e14; color: white; }
+        .low { background-color: #20c997; color: white; }
+        .bg-purple { background-color: #8b5cf6; color: white; }
+        .border-danger { border-radius: 10px; }
+        .modal-dialog {
+            --bs-modal-margin: 0.5rem;
+            margin: var(--bs-modal-margin);
+            position: absolute !important;
+            left: 50% !important;
+            top: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            max-width: 500px;
+            width: 95%;
         }
-        .priority-low {
-            background-color: #20c997;
-            color: white;
-            font-weight: bold;
-            padding: 2px 8px;
-            border-radius: 4px;
-        }
-        .object-list {
-            position: absolute;
-            top: 70px;
-            left: 10px;
-            width: 300px;
-            max-height: calc(100vh - 130px);
-            overflow-y: auto;
-            background-color: white;
+        .modal-content {
+            --bs-modal-padding: 0.5rem;
+            padding: 0;
             border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            padding: 15px;
-            z-index: 1000;
+            overflow: hidden;
         }
-        .object-item {
-            padding: 10px;
-            border-bottom: 1px solid #e9ecef;
-            cursor: pointer;
+        .modal-body {
+            padding: var(--bs-modal-padding);
+            overflow-y: auto; 
+            max-height: 80vh; 
         }
-        .object-item:hover {
-            background-color: #f8f9fa;
-        }
-        .object-info {
-            margin-top: 5px;
-            display: flex;
-            justify-content: space-between;
-        }
+        .modal-header, .modal-footer { padding: var(--bs-modal-padding); }
     </style>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid">
             <a class="navbar-brand" href="/">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-exclamation-triangle-fill" viewBox="0 0 16 16">
-                    <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+                <div>
+                    <svg xmlns="http://www.w3.org/2000/svg" style="padding-bottom: 5px; color: #dc3545;" width="25" height="25" fill="currentColor" class="bi bi-exclamation-triangle-fill" viewBox="0 0 16 16">
+                        <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"></path>
                 </svg>
+                </div>
                 Система інформування про вибухонебезпечні предмети
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false"
+                    aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
@@ -166,6 +126,8 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/tasks">Мої завдання</a>
                     </li>
+                </ul>
+                <ul class="navbar-nav">
                     <li class="nav-item">
                         <a class="nav-link" href="/profile">Профіль</a>
                     </li>
@@ -179,9 +141,14 @@
 
     <div id="map"></div>
 
-    <div class="object-list">
-        <h6>Список об'єктів</h6>
-        <div class="form-group mb-3">
+    <div class="admin-controls">
+        <button class="toggle-panel-btn" id="togglePanelBtn" title="Згорнути/Розгорнути">
+            <i class="bi bi-chevron-left"></i>
+        </button>
+        <div class="panel-content">
+            <h6>Адміністративні інструменти</h6>
+            <div class="mb-3">
+                <label for="filterStatus" class="form-label">Фільтр за статусом</label>
             <select class="form-select form-select-sm" id="filterStatus">
                 <option value="all">Всі статуси</option>
                 <option value="secret">Секретні</option>
@@ -191,82 +158,84 @@
                 <option value="demined">Розміновані</option>
             </select>
         </div>
-        <div id="objectsList">
+            <div class="mb-3">
+                <label for="filterRegion" class="form-label">Фільтр за регіоном</label>
+                <select class="form-select form-select-sm" id="filterRegion">
+                    <option value="all">Всі регіони</option>
             <!-- Will be populated dynamically -->
+                </select>
+            </div>
+            <div class="mb-3">
+                <label for="filterPriority" class="form-label">Фільтр за пріоритетом</label>
+                <select class="form-select form-select-sm" id="filterPriority">
+                    <option value="all">Всі пріоритети</option>
+                    <option value="secret">Секретно</option>
+                    <option value="high">Високий</option>
+                    <option value="medium">Середній</option>
+                    <option value="low">Низький</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <button id="applyFilters" class="btn btn-sm btn-primary">Застосувати фільтри</button>
+                <button id="resetFilters" class="btn btn-sm btn-outline-secondary ms-2">Скинути</button>
+            </div>
+            <hr>
+            <div class="mb-3">
+                <label class="form-label">Останні додані об'єкти</label>
+                <div id="recentObjects" class="overflow-auto" style="max-height:200px;"></div>
+            </div>
         </div>
     </div>
 
     <div class="status-legend">
-        <div class="status-item">
-            <div class="status-color purple"></div>
-            <span>Секретна</span>
-        </div>
-        <div class="status-item">
-            <div class="status-color red"></div>
-            <span>Замінована</span>
-        </div>
-        <div class="status-item">
-            <div class="status-color yellow"></div>
-            <span>Непідтверджена</span>
-        </div>
-        <div class="status-item">
-            <div class="status-color gray"></div>
-            <span>Архів</span>
-        </div>
-        <div class="status-item">
-            <div class="status-color green"></div>
-            <span>Розмінована</span>
-        </div>
+        <div class="status-item"><div class="status-color purple"></div><span>Секретна зона</span></div>
+        <div class="status-item"><div class="status-color red"></div><span>Замінована</span></div>
+        <div class="status-item"><div class="status-color yellow"></div><span>Непідтверджена</span></div>
+        <div class="status-item"><div class="status-color gray"></div><span>Архів</span></div>
+        <div class="status-item"><div class="status-color green"></div><span>Розмінована</span></div>
+        <div class="status-item"><div class="status-color border border-danger bg-transparent"></div><span>Червона зона</span></div>
     </div>
 
-    <div class="map-controls">
-        <button class="map-control-btn" id="zoomIn" title="Збільшити">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-lg" viewBox="0 0 16 16">
-                <path d="M8 0a1 1 0 0 1 1 1v6h6a1 1 0 1 1 0 2H9v6a1 1 0 1 1-2 0V9H1a1 1 0 0 1 0-2h6V1a1 1 0 0 1 1-1z"/>
-            </svg>
-        </button>
-        <button class="map-control-btn" id="zoomOut" title="Зменшити">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-dash-lg" viewBox="0 0 16 16">
-                <path d="M0 8a1 1 0 0 1 1-1h14a1 1 0 1 1 0 2H1a1 1 0 0 1-1-1z"/>
-            </svg>
-        </button>
-        <button class="map-control-btn" id="layers" title="Шари">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-layers" viewBox="0 0 16 16">
-                <path d="M8.235 1.559a.5.5 0 0 0-.47 0l-7.5 4a.5.5 0 0 0 0 .882L3.188 8 .264 9.559a.5.5 0 0 0 0 .882l7.5 4a.5.5 0 0 0 .47 0l7.5-4a.5.5 0 0 0 0-.882L12.813 8l2.922-1.559a.5.5 0 0 0 0-.882l-7.5-4zm3.515 7.008L14.438 10 8 13.433 1.562 10 4.25 8.567l3.515 1.874a.5.5 0 0 0 .47 0l3.515-1.874zM8 9.433 1.562 6 8 2.567 14.438 6 8 9.433z"/>
-            </svg>
-        </button>
-        <button class="map-control-btn" id="route" title="Маршрут">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-signpost-split" viewBox="0 0 16 16">
-                <path d="M7 7V1.414a1 1 0 0 1 2 0V2h5a1 1 0 0 1 .8.4l.975 1.3a.5.5 0 0 1 0 .6L14.8 5.6a1 1 0 0 1-.8.4H9v10H7v-5H2a1 1 0 0 1-.8-.4L.225 9.3a.5.5 0 0 1 0-.6L1.2 7.4A1 1 0 0 1 2 7h5zm1 3V8H2l-.75 1L2 10h6zm0-5h6l.75-1L14 3H8v2z"/>
-            </svg>
-        </button>
+    <div class="region-filter" style="position:absolute;top:70px;right:10px;z-index:1000;background:white;padding:10px;border-radius:4px;box-shadow:0 2px 6px rgba(0,0,0,0.3);width:200px;">
+        <label for="regionFilter" class="form-label small mb-1">Фільтр за регіоном:</label>
+        <select class="form-select form-select-sm" id="regionFilter">
+            <option value="all">Всі регіони</option>
+        </select>
     </div>
 
-    <button class="btn btn-primary action-btn add-object-btn" data-bs-toggle="modal" data-bs-target="#addObjectModal">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-plus-lg" viewBox="0 0 16 16">
-            <path d="M8 0a1 1 0 0 1 1 1v6h6a1 1 0 1 1 0 2H9v6a1 1 0 1 1-2 0V9H1a1 1 0 0 1 0-2h6V1a1 1 0 0 1 1-1z"/>
-        </svg>
-        Додати об'єкт
+    <!-- Button to report danger -->
+    <button class="btn btn-danger report-btn" id="reportDangerBtn" style="position:absolute; top:5px; left: 50%; transform: translateX(-50%); font-size: 20px;  z-index:1000;">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>Повідомити про небезпеку
     </button>
 
-    <button class="btn btn-success action-btn" data-bs-toggle="modal" data-bs-target="#updateStatusModal">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-check2-circle" viewBox="0 0 16 16">
-            <path d="M2.5 8a5.5 5.5 0 0 1 8.25-4.764.5.5 0 0 0 .5-.866A6.5 6.5 0 1 0 14.5 8a.5.5 0 0 0-1 0 5.5 5.5 0 1 1-11 0z"/>
-            <path d="M15.354 3.354a.5.5 0 0 0-.708-.708L8 9.293 5.354 6.646a.5.5 0 1 0-.708.708l3 3a.5.5 0 0 0 .708 0l7-7z"/>
-        </svg>
-        Змінити статус
-    </button>
-
-    <!-- Modal for adding new object -->
-    <div class="modal fade" id="addObjectModal" tabindex="-1" aria-labelledby="addObjectModalLabel" aria-hidden="true">
+    <!-- Modal for reporting danger -->
+    <div class="modal fade" id="reportModal" tabindex="-1" aria-labelledby="reportModalLabel" data-bs-backdrop="static" aria-modal="true" role="dialog">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="addObjectModalLabel">Додати новий об'єкт</h5>
+                    <h5 class="modal-title" id="reportModalLabel">Повідомити про вибухонебезпечний об'єкт</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <form id="addObjectForm">
+                        <div class="mb-3">
+                            <label class="form-label">Фото ситуації</label>
+                            <div class="camera-wrapper position-relative mb-2" style="width:100%; height:300px; background-color:#000;">
+                                <video id="cameraPreview" style="width:100%; height:100%; object-fit:cover;" autoplay muted></video>
+                                <canvas id="photoCanvas" style="display:none; width:100%; height:100%;"></canvas>
+                                <div id="gpsStatus" class="position-absolute top-0 end-0 p-2 badge bg-warning">Отримання GPS...</div>
+                                <div id="photoCountdown" class="position-absolute top-50 start-50 translate-middle badge bg-danger fs-1" style="display:none;">10</div>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <button type="button" id="startCamera" class="btn btn-sm btn-primary">Увімкнути камеру</button>
+                                <button type="button" id="takePhoto" class="btn btn-sm btn-success" disabled>Зробити фото</button>
+                                <button type="button" id="retakePhoto" class="btn btn-sm btn-secondary" style="display:none;">Перезняти</button>
+                            </div>
+                            <input type="hidden" id="photoData" name="photoData">
+                            <small class="form-text text-muted">
+                                <i class="bi bi-info-circle"></i> Для точного визначення місцезнаходження залишайтесь на місці під час фотографування.
+                            </small>
+                        </div>
+                    <form id="reportForm">
                         <div class="mb-3">
                             <label for="title" class="form-label">Назва</label>
                             <input type="text" class="form-control" id="title" required>
@@ -276,89 +245,52 @@
                             <textarea class="form-control" id="description" rows="3"></textarea>
                         </div>
                         <div class="mb-3">
-                            <label for="latitude" class="form-label">Широта</label>
-                            <input type="number" step="any" class="form-control" id="latitude" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="longitude" class="form-label">Довгота</label>
-                            <input type="number" step="any" class="form-control" id="longitude" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="status" class="form-label">Статус</label>
-                            <select class="form-select" id="status" required>
-                                <option value="secret">Секретна</option>
-                                <option value="mined">Замінована</option>
-                                <option value="unconfirmed">Непідтверджена</option>
-                                <option value="archived">Архів</option>
-                                <option value="demined">Розмінована</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label for="priority" class="form-label">Пріоритет</label>
-                            <select class="form-select" id="priority" required>
-                                <option value="high">Високий</option>
-                                <option value="medium">Середній</option>
-                                <option value="low">Низький</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
                             <label for="region" class="form-label">Регіон</label>
                             <select class="form-select" id="region" required>
                                 <!-- Will be populated dynamically -->
                             </select>
                         </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
-                    <button type="button" class="btn btn-primary" id="saveObject">Зберегти</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal for updating status -->
-    <div class="modal fade" id="updateStatusModal" tabindex="-1" aria-labelledby="updateStatusModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="updateStatusModalLabel">Змінити статус об'єкта</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="updateStatusForm">
                         <div class="mb-3">
-                            <label for="objectId" class="form-label">Вибрати об'єкт</label>
-                            <select class="form-select" id="objectId" required>
-                                <!-- Will be populated dynamically -->
-                            </select>
+                            <label for="latitude" class="form-label">Широта</label>
+                            <input type="number" step="any" class="form-control" id="latitude" required readonly>
+                            <small class="form-text text-muted">GPS-координати визначаються автоматично</small>
                         </div>
                         <div class="mb-3">
-                            <label for="newStatus" class="form-label">Новий статус</label>
-                            <select class="form-select" id="newStatus" required>
-                                <option value="secret">Секретна</option>
-                                <option value="mined">Замінована</option>
-                                <option value="unconfirmed">Непідтверджена</option>
-                                <option value="archived">Архів</option>
-                                <option value="demined">Розмінована</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label for="statusNote" class="form-label">Примітка</label>
-                            <textarea class="form-control" id="statusNote" rows="3"></textarea>
+                            <label for="longitude" class="form-label">Довгота</label>
+                            <input type="number" step="any" class="form-control" id="longitude" required readonly>
                         </div>
                     </form>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
-                    <button type="button" class="btn btn-success" id="saveStatus">Зберегти</button>
+                    <button type="button" class="btn btn-warning" id="submitReport">Відправити повідомлення</button>
                 </div>
             </div>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&callback=initMap" async defer></script>
-    <script src="/static/js/sapper_map.js"></script>
+    <script src="/static/js/map_utilities.js"></script>
+    <script src="/static/js/admin_map.js?v=1.0.2"></script>
+    <script src="/static/js/danger_reporting.js"></script>
+    <script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
+    <script>
+        const apiKey = "{{ google_maps_api_key }}";
+        const apiUrl = apiKey && apiKey !== "YOUR_GOOGLE_MAPS_API_KEY_HERE" && apiKey !== ""
+            ? `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&callback=initGoogleMaps`
+            : `https://maps.googleapis.com/maps/api/js?loading=async&callback=initGoogleMaps`;
+
+        if (!apiKey || apiKey === "YOUR_GOOGLE_MAPS_API_KEY_HERE" || apiKey === "") {
+            console.warn("API-ключ Google Maps не указан. Карта может работать с ограничениями.");
+        }
+
+        function initGoogleMaps() {
+            initMap();
+                }
+
+        const script = document.createElement('script'); script.src = apiUrl; script.async = true; script.defer = true;
+        script.onerror = () => { console.error("Ошибка загрузки Google Maps API."); const m = document.getElementById("map"); m && ((m.innerHTML = '<div class="alert alert-danger">Не удалось загрузить карту.</div>'), m.style.height='auto'); };
+        document.head.appendChild(script);
+    </script>
 </body>
 </html> 
