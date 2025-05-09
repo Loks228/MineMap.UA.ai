@@ -34,17 +34,27 @@
 
         .btn-group-vertical { position: absolute; bottom: 100px; right: 20px; z-index: 1000; }
         .admin-controls {
-            position: absolute; top: 150px; left: 10px; width: 300px;
-            background-color: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            padding: 15px; z-index: 1000;
+            position: absolute;
+            top: 150px;
+            left: 10px;
+            width: 300px;
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            z-index: 1000;
             transition: transform 0.3s ease, width 0.3s ease;
         }
         .admin-controls.collapsed {
-            transform: translateX(-290px);
-            width: 50px;
+            transform: translateX(-250px);
+            width: 300px;
             overflow: hidden;
-            padding: 10px 5px;
+            opacity: 1;
+            pointer-events: auto;
         }
+
         .toggle-list-btn {
             position: absolute;
             right: 8px;
@@ -52,7 +62,6 @@
             background: rgba(255, 255, 255, 0.2);
             border: none;
             border-radius: 4px;
-            font-size: 20px;
             cursor: pointer;
             padding: 3px 7px;
             color: white;
@@ -159,10 +168,10 @@
 
     <div class="admin-controls">
         <button class="toggle-list-btn" id="toggleListBtn" title="Згорнути">
-            <i class="bi bi-x-lg"></i>
+            <i class="bi bi-chevron-left"></i>
         </button>
         <div class="panel-content">
-            <div class="admin-header">Адміністративні інструменти</div>
+            <div class="admin-header">інструменти сапера</div>
             <div class="mb-3">
                 <label for="filterStatus" class="form-label">Фільтр за статусом</label>
             <select class="form-select form-select-sm" id="filterStatus">
@@ -302,8 +311,11 @@
         }
 
         function initGoogleMaps() {
+            // Initialize the map
             initMap();
-                }
+            
+            // Note: initData is called automatically inside initMap function
+        }
 
         const script = document.createElement('script'); script.src = apiUrl; script.async = true; script.defer = true;
         script.onerror = () => { console.error("Ошибка загрузки Google Maps API."); const m = document.getElementById("map"); m && ((m.innerHTML = '<div class="alert alert-danger">Не удалось загрузить карту.</div>'), m.style.height='auto'); };

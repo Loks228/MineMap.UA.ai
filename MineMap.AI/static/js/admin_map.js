@@ -454,9 +454,9 @@ async function addMarkersToMap() {
                     
                     // Создаем AdvancedMarkerElement
                     marker = new google.maps.marker.AdvancedMarkerElement({
-                        position: position,
-                        map: map,
-                        title: obj.title || `Об'єкт #${obj.id}`,
+                    position: position,
+                    map: map,
+                    title: obj.title || `Об'єкт #${obj.id}`,
                         content: markerContent
                     });
                 } else {
@@ -469,7 +469,7 @@ async function addMarkersToMap() {
                     });
                     
                     // Добавляем маркер в массив для кластеризации
-                    markersForCluster.push(marker);
+                markersForCluster.push(marker);
                 }
                 
                 // Информационное окно
@@ -761,6 +761,18 @@ function editObject(objectId) {
     document.getElementById('priority').value = obj.priority;
     document.getElementById('region').value = obj.region_id;
     
+    // Set radius value and update display
+    const radiusSlider = document.getElementById('radius');
+    if (radiusSlider && obj.radius) {
+        radiusSlider.value = obj.radius;
+        // Update the displayed value
+        const radiusValue = document.getElementById('radiusValue');
+        if (radiusValue) {
+            const km = (obj.radius / 1000).toFixed(1);
+            radiusValue.textContent = `${obj.radius}м (${km}км)`;
+        }
+    }
+    
     // Показываем модальное окно редактирования
     const addObjectModal = new bootstrap.Modal(document.getElementById('addObjectModal'));
     addObjectModal.show();
@@ -796,6 +808,7 @@ async function saveObject() {
         const status = document.getElementById('status').value;
         const priority = document.getElementById('priority').value;
         const regionId = parseInt(document.getElementById('region').value);
+        const radius = parseInt(document.getElementById('radius').value);
         
         // Получаем опциональные поля (если они есть в форме)
         const isCluster = document.getElementById('isCluster') ? 
@@ -815,7 +828,8 @@ async function saveObject() {
             longitude,
             status,
             priority,
-            region_id: regionId
+            region_id: regionId,
+            radius: radius
         };
         
         // Определяем, создаем новый объект или обновляем существующий

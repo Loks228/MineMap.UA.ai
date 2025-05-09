@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Problem Flags Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .flag-test-block {
+            border: 1px solid #ccc;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        .flag-row {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+        .flag-item {
+            text-align: center;
+            width: 100px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .status {
+            padding: 5px 10px;
+            border-radius: 5px;
+            display: inline-block;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .status-secret {
+            background-color: #8b5cf6;
+            color: white;
+        }
+        .status-archived {
+            background-color: #6b7280;
+            color: white;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Problem Flags Test</h1>
+    <p>This page tests the problematic purple and gray flag images.</p>
+
+    <div class="flag-test-block">
+        <h2>Direct Image Tests</h2>
+        <div class="flag-row">
+            <div class="flag-item">
+                <img src="static/images/flag_purple.png" width="48" height="48" alt="Purple Flag">
+                <div>Purple Flag</div>
+                <div class="status status-secret">Secret</div>
+                <div id="purple-status"></div>
+            </div>
+            <div class="flag-item">
+                <img src="static/images/flag_gray.png" width="48" height="48" alt="Gray Flag">
+                <div>Gray Flag</div>
+                <div class="status status-archived">Archived</div>
+                <div id="gray-status"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="flag-test-block">
+        <h2>JavaScript DOM Creation Test</h2>
+        <p>This tests how JavaScript creates and adds flag images to the DOM (similar to how the map does it):</p>
+        <div id="js-test-container" class="flag-row"></div>
+    </div>
+
+    <div class="flag-test-block">
+        <h2>Network Request Test</h2>
+        <p>This tests fetching the images directly via fetch API:</p>
+        <div id="fetch-results"></div>
+    </div>
+
+    <script>
+        // Function to check if image loaded successfully
+        function checkImageStatus(imgElement, statusElementId) {
+            const statusElement = document.getElementById(statusElementId);
+            
+            imgElement.onload = function() {
+                statusElement.textContent = "✅ Loaded successfully";
+                statusElement.style.color = "green";
+            };
+            
+            imgElement.onerror = function() {
+                statusElement.textContent = "❌ Failed to load";
+                statusElement.style.color = "red";
+            };
+        }
+        
+        // Check static images
+        checkImageStatus(document.querySelector('img[alt="Purple Flag"]'), 'purple-status');
+        checkImageStatus(document.querySelector('img[alt="Gray Flag"]'), 'gray-status');
+        
+        // JavaScript DOM creation test
+        function createFlagElements() {
+            const container = document.getElementById('js-test-container');
+            
+            // Create purple flag
+            const purpleDiv = document.createElement('div');
+            purpleDiv.className = 'flag-item';
+            
+            const purpleImg = document.createElement('img');
+            purpleImg.src = 'static/images/flag_purple.png';
+            purpleImg.width = 48;
+            purpleImg.height = 48;
+            purpleImg.alt = 'Purple Flag (JS)';
+            
+            const purpleLabel = document.createElement('div');
+            purpleLabel.textContent = 'Purple Flag (JS)';
+            
+            const purpleStatus = document.createElement('div');
+            purpleStatus.className = 'status status-secret';
+            purpleStatus.textContent = 'Secret';
+            
+            const purpleLoadStatus = document.createElement('div');
+            purpleLoadStatus.id = 'purple-js-status';
+            
+            purpleDiv.appendChild(purpleImg);
+            purpleDiv.appendChild(purpleLabel);
+            purpleDiv.appendChild(purpleStatus);
+            purpleDiv.appendChild(purpleLoadStatus);
+            container.appendChild(purpleDiv);
+            
+            // Create gray flag
+            const grayDiv = document.createElement('div');
+            grayDiv.className = 'flag-item';
+            
+            const grayImg = document.createElement('img');
+            grayImg.src = 'static/images/flag_gray.png';
+            grayImg.width = 48;
+            grayImg.height = 48;
+            grayImg.alt = 'Gray Flag (JS)';
+            
+            const grayLabel = document.createElement('div');
+            grayLabel.textContent = 'Gray Flag (JS)';
+            
+            const grayStatus = document.createElement('div');
+            grayStatus.className = 'status status-archived';
+            grayStatus.textContent = 'Archived';
+            
+            const grayLoadStatus = document.createElement('div');
+            grayLoadStatus.id = 'gray-js-status';
+            
+            grayDiv.appendChild(grayImg);
+            grayDiv.appendChild(grayLabel);
+            grayDiv.appendChild(grayStatus);
+            grayDiv.appendChild(grayLoadStatus);
+            container.appendChild(grayDiv);
+            
+            // Check status
+            checkImageStatus(purpleImg, 'purple-js-status');
+            checkImageStatus(grayImg, 'gray-js-status');
+        }
+        
+        // Network fetch test
+        async function testFetch() {
+            const resultContainer = document.getElementById('fetch-results');
+            
+            try {
+                // Test purple flag
+                const purpleResponse = await fetch('static/images/flag_purple.png');
+                const purpleResult = document.createElement('pre');
+                purpleResult.textContent = `Purple flag: ${purpleResponse.status} ${purpleResponse.statusText}
+Content-Type: ${purpleResponse.headers.get('content-type')}
+Content-Length: ${purpleResponse.headers.get('content-length')} bytes`;
+                resultContainer.appendChild(purpleResult);
+                
+                // Test gray flag
+                const grayResponse = await fetch('static/images/flag_gray.png');
+                const grayResult = document.createElement('pre');
+                grayResult.textContent = `Gray flag: ${grayResponse.status} ${grayResponse.statusText}
+Content-Type: ${grayResponse.headers.get('content-type')}
+Content-Length: ${grayResponse.headers.get('content-length')} bytes`;
+                resultContainer.appendChild(grayResult);
+            } catch (error) {
+                const errorElement = document.createElement('div');
+                errorElement.textContent = `Error: ${error.message}`;
+                errorElement.style.color = 'red';
+                resultContainer.appendChild(errorElement);
+            }
+        }
+        
+        // Run tests when page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            createFlagElements();
+            testFetch();
+        });
+    </script>
+</body>
+</html> 

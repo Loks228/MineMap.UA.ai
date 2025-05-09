@@ -98,13 +98,9 @@
             font-size: 1rem;
             margin-left: 10px;
         }
-
         .border-danger {
             border-radius: 10px;
         }
-            /* .border-danger:hover {
-            border: 1px solid blue;
-            } */
         .object-list {
             position: absolute;
             top: 150px;
@@ -133,7 +129,6 @@
             background: rgba(255, 255, 255, 0.2);
             border: none;
             border-radius: 4px;
-            font-size: 20px;
             cursor: pointer;
             padding: 3px 7px;
             color: white;
@@ -199,7 +194,6 @@
             font-weight: bold;
         }
         
-        /* Custom modal styling */
         .modal-dialog {
             --bs-modal-margin: 0.5rem;
             margin: var(--bs-modal-margin);
@@ -275,10 +269,10 @@
 
     <div class="object-list">
         <button class="toggle-list-btn" id="toggleListBtn" title="Згорнути">
-            <i class="bi bi-x-lg"></i>
+            <i class="bi bi-chevron-left"></i>
         </button>
         <div class="toggle-list-content">
-            <div class="admin-header">інструменти</div>
+            <div class="admin-header">інструменти громадянина</div>
             
             <div class="mb-3">
                 <label for="filterStatus" class="form-label">Фільтр за статусом</label>
@@ -378,7 +372,7 @@
     </div>
 
     <!-- Button to report danger -->
-    <button class="btn btn-danger report-btn" id="reportDangerBtn" style="position:absolute; top:5px; left: 50%; transform: translateX(-50%); font-size: 20px;  z-index:1000;">
+    <button class="btn btn-danger report-btn" id="reportDangerBtn" style="position:absolute; top:7px; left: 50%; transform: translateX(-50%); font-size: 20px;  z-index:1000;">
         <i class="bi bi-exclamation-triangle-fill me-2"></i>Повідомити про небезпеку
     </button>
 
@@ -391,11 +385,6 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="text-center mb-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" class="bi bi-exclamation-triangle-fill text-warning" viewBox="0 0 16 16">
-                            <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
-                        </svg>
-                    </div>
                         <div class="mb-3">
                             <label class="form-label">Фото ситуації</label>
                             <div class="camera-wrapper position-relative mb-2" style="width:100%; height:300px; background-color:#000;">
@@ -448,51 +437,23 @@
         </div>
     </div>
 
+    <!-- Footer end -->
+
+    <!-- JavaScript Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="/static/js/map.js"></script>
-    <script src="/static/js/map_utilities.js"></script>
-    <script src="/static/js/danger_reporting.js"></script>
     <script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
     <script src="/static/js/citizen_map.js"></script>
-    
     <script>
-        // Загружаем Google Maps API
-        const apiKey = "{{ google_maps_api_key }}";
-        const apiUrl = apiKey && apiKey !== "YOUR_GOOGLE_MAPS_API_KEY_HERE" && apiKey !== ""
-            ? `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&callback=initGoogleMaps`
-            : `https://maps.googleapis.com/maps/api/js?loading=async&callback=initGoogleMaps`;
-
-        if (!apiKey || apiKey === "YOUR_GOOGLE_MAPS_API_KEY_HERE" || apiKey === "") {
-            console.warn("API-ключ Google Maps не указан. Карта может работать с ограничениями (водяной знак).");
-        }
-
-        // Все, что использует Google Maps API, помещаем в эту функцию
-        function initGoogleMaps() {
-            // Инициализируем карту - this calls the map.js initMap function
-            initMap();
-            
-            // After map is initialized, load citizen-specific data
-            loadExplosiveObjects();
-            getCurrentUser();
-        }
-        
-        // Создаем скрипт динамически
-        const script = document.createElement('script');
-        script.src = apiUrl;
-        script.async = true;
-        script.defer = true;
-        script.onerror = () => {
-            console.error("Ошибка загрузки Google Maps API. Проверьте подключение к интернету или API-ключ.");
-            const mapElement = document.getElementById("map");
-            if (mapElement) {
-                mapElement.innerHTML = `
-                    <div class="alert alert-danger">
-                        Не удалось загрузить карту. Проверьте подключение к интернету или API-ключ.
-                    </div>`;
-                mapElement.style.height = 'auto';
-            }
-        };
-        document.head.appendChild(script);
+        // Load the Google Maps API properly
+        document.addEventListener('DOMContentLoaded', function() {
+            // Make sure all necessary scripts are loaded before loading Google Maps
+            const apiKey = "{{ google_maps_api_key }}";
+            const script = document.createElement('script');
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap&loading=async`;
+            script.async = true;
+            script.defer = true;
+            document.head.appendChild(script);
+        });
     </script>
 </body>
 </html> 

@@ -46,6 +46,7 @@ class ExplosiveObjectBase(BaseModel):
     status: str
     priority: str
     region_id: int
+    radius: Optional[int] = None
 
 class ExplosiveObjectCreate(ExplosiveObjectBase):
     pass
@@ -58,3 +59,6 @@ class ExplosiveObjectResponse(ExplosiveObjectBase):
     photo_url: Optional[str] = None
     reported_at: datetime
     updated_at: datetime
+    area_size: Optional[float] = None
+    danger_level: Optional[str] = None
+    is_cluster: Optional[bool] = None

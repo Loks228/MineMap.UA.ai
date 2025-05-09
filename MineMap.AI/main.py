@@ -494,6 +494,10 @@ async def get_explosive_objects(current_user: Optional[UserResponse] = Depends(g
         if "is_cluster" in obj and obj["is_cluster"]:
             response_obj.is_cluster = obj["is_cluster"]
             
+        # Add radius field if it exists
+        if "radius" in obj and obj["radius"]:
+            response_obj.radius = obj["radius"]
+            
         result.append(response_obj)
     
     return result
@@ -521,17 +525,30 @@ async def create_explosive_object(
             # Create new object
             print(f"Creating new explosive object in database")
             try:
-                await conn.execute(
-                    """
-                    INSERT INTO explosive_objects 
-                    (title, description, latitude, longitude, status, priority, region_id, reported_by)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (object_data.title, object_data.description, object_data.latitude, 
-                    object_data.longitude, object_data.status, object_data.priority, 
-                    object_data.region_id, current_user.id)
-                )
-                await conn.commit()
+                # Include radius in the SQL query if provided
+                if object_data.radius is not None:
+                    await conn.execute(
+                        """
+                        INSERT INTO explosive_objects 
+                        (title, description, latitude, longitude, status, priority, region_id, reported_by, radius)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (object_data.title, object_data.description, object_data.latitude, 
+                        object_data.longitude, object_data.status, object_data.priority, 
+                        object_data.region_id, current_user.id, object_data.radius)
+                    )
+                else:
+                    await conn.execute(
+                        """
+                        INSERT INTO explosive_objects
+                        (title, description, latitude, longitude, status, priority, region_id, reported_by) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (object_data.title, object_data.description, object_data.latitude,
+                        object_data.longitude, object_data.status, object_data.priority,
+                        object_data.region_id, current_user.id)
+                    )
+                    await conn.commit()
                 
                 # Get created object ID (last inserted row id)
                 cursor = await conn.execute("SELECT last_insert_rowid()")
@@ -978,6 +995,11 @@ async def update_explosive_object(
         if "description" in object_data:
             update_fields.append("description = ?")
             update_values.append(object_data["description"])
+        
+        # Allow radius update for all users
+        if "radius" in object_data:
+            update_fields.append("radius = ?")
+            update_values.append(object_data["radius"])
         
         # Если пользователь - админ или модератор, разрешаем обновлять статус и приоритет
         if current_user.role in ["admin", "moderator"]:

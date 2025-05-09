@@ -19,8 +19,10 @@ let map;
 // Глобальная переменная для хранения информации о текущем пользователе
 let currentUser = null;
 
-// Make sure initMap is available in the global scope
-function initMap() {
+// Define map variable at the top if not already defined
+
+// Initialize the map - IMPORTANT: Must be defined at global scope for Google Maps callback
+window.initMap = function() {
     try {
         // Create a new map centered on Ukraine
         map = new google.maps.Map(document.getElementById('map'), {
@@ -34,8 +36,6 @@ function initMap() {
                 position: google.maps.ControlPosition.TOP_RIGHT
             }
         });
-
-        console.log("Map successfully initialized");
         
         // Load objects after map is initialized
         loadExplosiveObjects();
@@ -57,25 +57,15 @@ function initMap() {
         }
         
         // Setup click listener for adding new objects
-        if (typeof setupMapClickListener === 'function') {
-            setupMapClickListener();
-        }
+        setupMapClickListener();
     } catch (error) {
         console.error('Ошибка при инициализации карты:', error);
     }
-}
-
-// Ensure initMap is also available as window.initMap for Google Maps API
-window.initMap = initMap;
+};
 
 // Function to verify map is initialized
 function isMapInitialized() {
-    try {
-        return map && typeof map === 'object' && map instanceof google.maps.Map && google.maps;
-    } catch (e) {
-        console.error("Error checking map initialization:", e);
-        return false;
-    }
+    return map && typeof map === 'object' && map instanceof google.maps.Map;
 }
 
 // Функция для получения информации о текущем пользователе
@@ -101,22 +91,7 @@ async function loadExplosiveObjects() {
             // Сервер уже отфильтровал секретные объекты, нет необходимости делать это на клиенте
             explosiveObjects = await response.json();
             console.log('Загружено объектов:', explosiveObjects.length);
-            
-            // Wait for map to be initialized before adding markers
-            if (!isMapInitialized()) {
-                console.log("Map not yet initialized, waiting to add markers...");
-                // We'll try again in a moment
-                setTimeout(() => {
-                    if (isMapInitialized()) {
             addMarkersToMap();
-                    } else {
-                        console.warn("Map still not initialized after delay, objects loaded but markers not added");
-                    }
-                }, 1000);
-            } else {
-                addMarkersToMap();
-            }
-            
             renderObjects(); // Вызываем функцию для отображения списка объектов
             
             // Загружаем регионы после получения объектов
@@ -483,7 +458,10 @@ async function addMarkersToMap() {
         filteredObjects.forEach(obj => {
             try {
                 // Создаем маркер
-                const markerIcon = getMarkerIconByStatus(obj.status);
+                const markerIcon = {
+                    url: getMarkerIconByStatus(obj.status),
+                    scaledSize: new google.maps.Size(32, 32)
+                };
                 
                 const marker = new google.maps.Marker({
                     position: { lat: obj.latitude, lng: obj.longitude },
@@ -495,15 +473,24 @@ async function addMarkersToMap() {
                 // Добавляем маркер в массив для возможного кластеризования
                 markersForCluster.push(marker);
                 
-                // Определяем радиус опасной зоны
-                let radius = obj.radius ? obj.radius : getRadiusFromPriority(obj.priority);
-                
-                // Создаем информационное окно с радиусом
+                // Создаем информационное окно (всплывающее окно при клике)
                 const infoWindow = new google.maps.InfoWindow({
                     content: `
-                        <div style="max-width: 200px; text-align: center;">
-                            <h6 style="margin: 5px 0;">${obj.title || `Об'єкт #${obj.id}`}</h6>
-                            <p style="margin: 5px 0;"><strong>Радіус небезпечної зони:</strong><br> ${radius}м (${(radius/1000).toFixed(1)}км)</p>
+                        <div style="max-width: 300px;">
+                            <h5 style="margin-top: 0;">${obj.title || `Об'єкт #${obj.id}`}</h5>
+                            ${obj.photo_url || obj.image_url ? 
+                                `<div style="margin-bottom: 10px; text-align: center;">
+                                    <img src="${obj.photo_url || obj.image_url}" alt="Фото об'єкта" style="max-width: 100%; max-height: 200px; border-radius: 4px;">
+                                </div>` : ''}
+                            <p>${obj.description || 'Опис відсутній'}</p>
+                            <p><strong>Статус:</strong> ${getStatusText(obj.status)}</p>
+                            <p><strong>Пріоритет:</strong> ${getPriorityText(obj.priority)}</p>
+                            <p><strong>Радіус небезпечної зони:</strong> ${obj.radius ? `${obj.radius}м (${(obj.radius/1000).toFixed(1)}км)` : getRadiusFromPriority(obj.priority) + 'м'}</p>
+                            <p><strong>Регіон:</strong> ${obj.region_name || 'Не вказано'}</p>
+                            <p><strong>Додано:</strong> ${formatDate(obj.reported_at)}</p>
+                            <div style="margin-top: 10px;">
+                                <button onclick="viewObjectDetails(${obj.id})" class="btn btn-sm btn-primary">Детальніше</button>
+                            </div>
                         </div>
                     `
                 });
@@ -516,6 +503,8 @@ async function addMarkersToMap() {
                 markers.push(marker);
                 
                 // Рисуем круг опасности вокруг маркера
+                let radius = obj.radius ? obj.radius : getRadiusFromPriority(obj.priority);
+                
                 const dangerCircle = new google.maps.Circle({
                     strokeColor: "#FF0000",
                     strokeOpacity: 0.8,
@@ -535,104 +524,71 @@ async function addMarkersToMap() {
         
         // Создаем кластеризатор, если есть маркеры для кластеризации
         if (markersForCluster.length > 0 && isMapInitialized()) {
-            try {
-                // Настройка рендеринга кластеров
-                const renderer = {
-                    render: ({ count, position }) => {
-                        try {
-                            // Use standard markers if AdvancedMarkerElement is not available
-                            if (!google.maps.marker || !google.maps.marker.AdvancedMarkerElement) {
-                                return new google.maps.Marker({
-                                    position,
-                                    label: {
-                                        text: String(count),
-                                        color: "white",
-                                        fontSize: "10px"
-                                    },
-                                    icon: {
-                                        path: google.maps.SymbolPath.CIRCLE,
-                                        scale: 20,
-                                        fillColor: "#ff0000",
-                                        fillOpacity: 0.7,
-                                        strokeWeight: 2,
-                                        strokeColor: "#ffffff"
-                                    }
-                                });
-                            }
-                            
-                            // Создаем элемент для кластера
-                            const clusterElement = document.createElement('div');
-                            clusterElement.className = 'cluster-marker';
-                            clusterElement.style.position = 'relative';
-                            
-                            // Определяем размер кластера в зависимости от количества маркеров
-                            let size = 48; // Минимальный размер
-                            if (count > 10) size = 64;
-                            if (count > 50) size = 80;
-                            if (count > 100) size = 96;
-                            
-                            // Создаем изображение флага
-                            const flagImg = document.createElement('img');
-                            flagImg.src = "https://maps.google.com/mapfiles/ms/icons/red-dot.png";
-                            flagImg.style.width = `${size}px`;
-                            flagImg.style.height = `${size}px`;
-                            clusterElement.appendChild(flagImg);
-                            
-                            // Добавляем стили для корректного позиционирования кластера
-                            clusterElement.style.transform = `translate(-6px, -${size}px)`;
-                            
-                            // Создаем контейнер для числа
-                            const countElement = document.createElement('div');
-                            countElement.style.position = 'absolute';
-                            countElement.style.top = '50%';
-                            countElement.style.left = '50%';
-                            countElement.style.transform = 'translate(-50%, -80%)';
-                            countElement.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-                            countElement.style.borderRadius = '50%';
-                            countElement.style.width = `${Math.round(size * 0.6)}px`;
-                            countElement.style.height = `${Math.round(size * 0.6)}px`;
-                            countElement.style.display = 'flex';
-                            countElement.style.alignItems = 'center';
-                            countElement.style.justifyContent = 'center';
-                            countElement.style.color = 'white';
-                            countElement.style.fontWeight = 'bold';
-                            countElement.style.fontSize = `${Math.round(size / 3)}px`;
-                            countElement.textContent = count;
-                            clusterElement.appendChild(countElement);
-                            
-                            // Создаем маркер для кластера
-                            return new google.maps.marker.AdvancedMarkerElement({
-                                position,
-                                content: clusterElement
-                            });
-                        } catch (error) {
-                            console.error("Error rendering cluster marker:", error);
-                            // Fallback to simple marker
-                            return new google.maps.Marker({
-                                position,
-                                label: String(count)
-                            });
-                        }
-                    }
-                };
-                
-                // Если старый кластеризатор существует, очищаем его
-                if (markerCluster) {
-                    markerCluster.clearMarkers();
-                }
-                
-                try {
-                    // Создаем новый кластеризатор
-                    markerCluster = new markerClusterer.MarkerClusterer({
-                        map: map,
-                        markers: markersForCluster,
-                        renderer
+            // Настройка рендеринга кластеров
+            const renderer = {
+                render: ({ count, position }) => {
+                    // Создаем элемент для кластера
+                    const clusterElement = document.createElement('div');
+                    clusterElement.className = 'cluster-marker';
+                    clusterElement.style.position = 'relative';
+                    
+                    // Определяем размер кластера в зависимости от количества маркеров
+                    let size = 48; // Минимальный размер
+                    if (count > 10) size = 64;
+                    if (count > 50) size = 80;
+                    if (count > 100) size = 96;
+                    
+                    // Создаем изображение флага
+                    const flagImg = document.createElement('img');
+                    flagImg.src = "/static/images/flag_red.png";
+                    flagImg.style.width = `${size}px`;
+                    flagImg.style.height = `${size}px`;
+                    clusterElement.appendChild(flagImg);
+                    
+                    // Добавляем стили для корректного позиционирования кластера
+                    clusterElement.style.transform = `translate(-6px, -${size}px)`;
+                    
+                    // Создаем контейнер для числа
+                    const countElement = document.createElement('div');
+                    countElement.style.position = 'absolute';
+                    countElement.style.top = '50%';
+                    countElement.style.left = '50%';
+                    countElement.style.transform = 'translate(-50%, -80%)';
+                    countElement.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+                    countElement.style.borderRadius = '50%';
+                    countElement.style.width = `${Math.round(size * 0.6)}px`;
+                    countElement.style.height = `${Math.round(size * 0.6)}px`;
+                    countElement.style.display = 'flex';
+                    countElement.style.alignItems = 'center';
+                    countElement.style.justifyContent = 'center';
+                    countElement.style.color = 'white';
+                    countElement.style.fontWeight = 'bold';
+                    countElement.style.fontSize = `${Math.round(size / 3)}px`;
+                    countElement.textContent = count;
+                    clusterElement.appendChild(countElement);
+                    
+                    // Создаем маркер для кластера
+                    return new google.maps.marker.AdvancedMarkerElement({
+                        position,
+                        content: clusterElement
                     });
-                } catch (error) {
-                    console.error('Error creating marker cluster:', error);
                 }
+            };
+            
+            // Если старый кластеризатор существует, очищаем его
+            if (markerCluster) {
+                markerCluster.clearMarkers();
+            }
+            
+            try {
+                // Создаем новый кластеризатор
+                markerCluster = new markerClusterer.MarkerClusterer({
+                    map: map,
+                    markers: markersForCluster,
+                    renderer
+                });
             } catch (error) {
-                console.error("Error setting up marker clusters:", error);
+                console.error('Error creating marker cluster:', error);
             }
         }
     } catch (error) {
@@ -653,8 +609,8 @@ function clearMarkers() {
         // Если есть кластеризатор маркеров, очищаем его
         if (markerCluster) {
             try {
-            markerCluster.clearMarkers();
-            markerCluster = null;
+                markerCluster.clearMarkers();
+                markerCluster = null;
             } catch (error) {
                 console.error('Error clearing marker cluster:', error);
             }
@@ -666,15 +622,14 @@ function clearMarkers() {
             try {
                 if (marker instanceof google.maps.Marker) {
                     marker.setMap(null);
-                } else if (google.maps.marker && google.maps.marker.AdvancedMarkerElement && 
-                           marker instanceof google.maps.marker.AdvancedMarkerElement) {
+                } else if (marker instanceof google.maps.marker.AdvancedMarkerElement) {
                     marker.map = null;
                 } else if (marker instanceof google.maps.Circle) {
-                        marker.setMap(null);
+                    marker.setMap(null);
                 } else if (marker && typeof marker.setMap === 'function') {
                     marker.setMap(null);
                 } else if (marker && 'map' in marker) {
-                        marker.map = null;
+                    marker.map = null;
                 }
             } catch (e) {
                 console.warn('Ошибка при удалении маркера:', e);
@@ -700,21 +655,14 @@ function getRadiusFromPriority(priority) {
 
 // Helper function to get marker icon based on status
 function getMarkerIconByStatus(status) {
-    let color;
     switch (status) {
-        case 'mined': color = 'red'; break;
-        case 'unconfirmed': color = 'yellow'; break;
-        case 'demined': color = 'green'; break;
-        case 'archived': color = 'gray'; break;
-        case 'secret': color = 'purple'; break;
-        default: color = 'blue'; break;
+        case 'mined': return '/static/images/red_marker.png';
+        case 'unconfirmed': return '/static/images/yellow_marker.png';
+        case 'demined': return '/static/images/green_marker.png';
+        case 'archived': return '/static/images/gray_marker.png';
+        case 'secret': return '/static/images/purple_marker.png';
+        default: return '/static/images/yellow_marker.png';
     }
-    
-    // Using Google's standard pin markers
-    return {
-        url: `https://maps.google.com/mapfiles/ms/icons/${color}-dot.png`,
-        scaledSize: new google.maps.Size(32, 32)
-    };
 }
 
 // Вспомогательные функции для отображения текста
@@ -744,6 +692,334 @@ function getPriorityText(priority) {
         case 'low': return 'Низький';
         default: return 'Невідомо';
     }
+}
+
+// Функция для редактирования объекта
+function editObject(objectId) {
+    // Находим объект по ID
+    const obj = explosiveObjects.find(o => o.id === objectId);
+    if (!obj) {
+        console.error(`Объект с ID ${objectId} не найден`);
+        return;
+    }
+    
+    // Проверяем, принадлежит ли объект текущему пользователю
+    if (!currentUser || obj.reported_by !== currentUser.id) {
+        alert('Вы можете редактировать только свои метки!');
+        return;
+    }
+    
+    // Получаем текущий радиус объекта или устанавливаем по умолчанию на основе приоритета
+    let defaultRadius = 15000; // 15 км по умолчанию
+    if (obj.radius) {
+        defaultRadius = obj.radius;
+    } else {
+        // Определяем радиус на основе приоритета
+        switch(obj.priority) {
+            case 'high': defaultRadius = 20000; break; // 20 км
+            case 'medium': defaultRadius = 15000; break; // 15 км
+            case 'low': defaultRadius = 10000; break; // 10 км
+        }
+    }
+    
+    // Создаем модальное окно для редактирования
+    const modalHtml = `
+        <div class="modal fade" id="editObjectModal" tabindex="-1" aria-labelledby="editObjectModalLabel" aria-hidden="true">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="editObjectModalLabel">Редагування об'єкта</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="editObjectForm">
+                            <input type="hidden" id="edit_object_id" value="${obj.id}">
+                            <div class="mb-3">
+                                <label for="edit_title" class="form-label">Назва</label>
+                                <input type="text" class="form-control" id="edit_title" value="${obj.title || ''}">
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_description" class="form-label">Опис</label>
+                                <textarea class="form-control" id="edit_description" rows="3">${obj.description || ''}</textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_status" class="form-label">Статус</label>
+                                <select class="form-select" id="edit_status" disabled>
+                                    <option value="unconfirmed" ${obj.status === 'unconfirmed' ? 'selected' : ''}>Непідтверджена</option>
+                                    <option value="mined" ${obj.status === 'mined' ? 'selected' : ''}>Замінована</option>
+                                    <option value="demined" ${obj.status === 'demined' ? 'selected' : ''}>Розмінована</option>
+                                    <option value="archived" ${obj.status === 'archived' ? 'selected' : ''}>Архів</option>
+                                </select>
+                                <small class="form-text text-muted">Статус может изменить только модератор или администратор</small>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_radius" class="form-label">Радіус небезпечної зони (метри)</label>
+                                <input type="range" class="form-range" id="edit_radius" min="100" max="50000" step="100" value="${defaultRadius}">
+                                <div class="d-flex justify-content-between">
+                                    <small>100м</small>
+                                    <span id="radius_value">${defaultRadius / 1000} км</span>
+                                    <small>50км</small>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                        <button type="button" class="btn btn-primary" id="saveObjectEdit">Зберегти</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Добавляем модальное окно в DOM
+    const modalContainer = document.createElement('div');
+    modalContainer.innerHTML = modalHtml;
+    document.body.appendChild(modalContainer);
+    
+    // Показываем модальное окно
+    const editModal = new bootstrap.Modal(document.getElementById('editObjectModal'));
+    editModal.show();
+    
+    // Добавляем обработчик изменения радиуса для обновления отображаемого значения
+    document.getElementById('edit_radius').addEventListener('input', function() {
+        document.getElementById('radius_value').textContent = (this.value / 1000) + ' км';
+    });
+    
+    // Добавляем обработчик для кнопки сохранения
+    document.getElementById('saveObjectEdit').addEventListener('click', async () => {
+        // Получаем данные из формы
+        const editedObj = {
+            id: parseInt(document.getElementById('edit_object_id').value),
+            title: document.getElementById('edit_title').value,
+            description: document.getElementById('edit_description').value,
+            radius: parseInt(document.getElementById('edit_radius').value)
+        };
+        
+        // Проверяем обязательные поля
+        if (!editedObj.title) {
+            alert('Заполните обязательные поля');
+            return;
+        }
+        
+        try {
+            // Отправляем запрос на обновление объекта
+            const response = await fetch(`/api/explosive-objects/${editedObj.id}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    title: editedObj.title,
+                    description: editedObj.description,
+                    radius: editedObj.radius
+                })
+            });
+            
+            if (response.ok) {
+                // Закрываем модальное окно
+                editModal.hide();
+                
+                // Удаляем модальное окно из DOM после закрытия
+                document.getElementById('editObjectModal').addEventListener('hidden.bs.modal', function () {
+                    this.remove();
+                });
+                
+                // Перезагружаем объекты
+                await loadExplosiveObjects();
+                
+                alert('Объект успешно обновлен');
+            } else {
+                const error = await response.json();
+                throw new Error(error.detail || 'Произошла ошибка при обновлении объекта');
+            }
+        } catch (error) {
+            console.error('Ошибка при обновлении объекта:', error);
+            alert('Ошибка при обновлении объекта: ' + error.message);
+        }
+    });
+    
+    // Удаляем модальное окно из DOM после закрытия
+    document.getElementById('editObjectModal').addEventListener('hidden.bs.modal', function () {
+        this.remove();
+    });
+}
+
+// Функция для отображения фото в полном размере
+function showFullSizePhoto(photoUrl, title) {
+    // Создаем модальное окно для просмотра фото в полном размере
+    const modalHtml = `
+        <div class="modal fade" id="fullSizePhotoModal" tabindex="-1" aria-labelledby="fullSizePhotoModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="fullSizePhotoModalLabel">${title || 'Фото об\'єкта'}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body text-center">
+                        <img src="${photoUrl}" alt="Фото об'єкта" style="max-width: 100%; max-height: 80vh;" id="fullSizeImage">
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Добавляем модальное окно в DOM
+    const modalContainer = document.createElement('div');
+    modalContainer.innerHTML = modalHtml;
+    document.body.appendChild(modalContainer);
+    
+    // Показываем модальное окно
+    const photoModal = new bootstrap.Modal(document.getElementById('fullSizePhotoModal'));
+    photoModal.show();
+    
+    // Удаляем модальное окно из DOM после закрытия
+    document.getElementById('fullSizePhotoModal').addEventListener('hidden.bs.modal', function() {
+        this.remove();
+    });
+    
+    // Добавляем обработчик ошибки для изображения
+    document.getElementById('fullSizeImage').addEventListener('error', function() {
+        this.src = '/static/images/no-image.png';
+        this.alt = 'Фото недоступно';
+    });
+}
+
+// Добавляем функцию глобально, чтобы она была доступна из HTML-кода модального окна
+window.showFullSizePhoto = showFullSizePhoto;
+window.viewObjectDetails = viewObjectDetails;
+
+// Функция для просмотра деталей объекта
+function viewObjectDetails(objectId) {
+    // Находим объект по ID
+    const obj = explosiveObjects.find(o => o.id === objectId);
+    if (!obj) {
+        console.error(`Объект с ID ${objectId} не найден`);
+        return;
+    }
+    
+    // Создаем модальное окно с деталями
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.id = 'objectDetailsModal';
+    modal.setAttribute('tabindex', '-1');
+    modal.setAttribute('aria-labelledby', 'objectDetailsModalLabel');
+    modal.setAttribute('aria-hidden', 'true');
+    
+    // Подготовка HTML для фото
+    const photoHtml = obj.photo_url ? 
+        `<div class="mb-3 text-center">
+            <img src="${obj.photo_url}" alt="Фото об'єкта" class="img-fluid rounded" 
+                style="max-height: 300px; cursor: pointer;" 
+                onclick="showFullSizePhoto('${obj.photo_url}', '${obj.title}')"
+                onerror="this.onerror=null; this.src='/static/images/no-image.svg'; this.alt='Фото недоступно';">
+            <div class="small text-muted">Натисніть на фото для збільшення</div>
+        </div>` : 
+        `<div class="mb-3 text-center bg-light p-5 rounded">
+            <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" fill="currentColor" class="bi bi-image text-muted" viewBox="0 0 16 16">
+                <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/>
+                <path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/>
+            </svg>
+            <p class="text-muted mt-2">Фото відсутнє</p>
+        </div>`;
+    
+    modal.innerHTML = `
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="objectDetailsModalLabel">${obj.title || `Об'єкт #${obj.id}`}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            ${photoHtml}
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <h6>Опис:</h6>
+                                <p>${obj.description || 'Опис відсутній'}</p>
+                            </div>
+                            <div class="mb-3">
+                                <h6>Статус:</h6>
+                                <span class="badge ${getStatusBadgeClass(obj.status)}">${getStatusText(obj.status)}</span>
+                            </div>
+                            <div class="mb-3">
+                                <h6>Пріоритет:</h6>
+                                <span class="badge ${getPriorityBadgeClass(obj.priority)}">${getPriorityText(obj.priority)}</span>
+                            </div>
+                            <div class="mb-3">
+                                <h6>Координати:</h6>
+                                <p>${obj.latitude.toFixed(6)}, ${obj.longitude.toFixed(6)}</p>
+                            </div>
+                            <div class="mb-3">
+                                <h6>Регіон:</h6>
+                                <p>${obj.region_name || 'Не вказано'}</p>
+                            </div>
+                            <div class="mb-3">
+                                <h6>Додано:</h6>
+                                <p>${formatDate(obj.reported_at)}</p>
+                            </div>
+                            ${obj.reported_by_username ? 
+                                `<div class="mb-3">
+                                    <h6>Повідомив:</h6>
+                                    <p>${obj.reported_by_username}</p>
+                                </div>` : ''
+                            }
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрити</button>
+                    ${currentUser && obj.reported_by === currentUser.id ? 
+                        `<button type="button" class="btn btn-warning" onclick="editObject(${obj.id})">Редагувати</button>` : ''
+                    }
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Добавляем модальное окно в DOM
+    document.body.appendChild(modal);
+    
+    // Инициализируем и показываем модальное окно
+    const modalInstance = new bootstrap.Modal(modal);
+    modalInstance.show();
+    
+    // Удаляем модальное окно из DOM после закрытия
+    modal.addEventListener('hidden.bs.modal', function () {
+        document.body.removeChild(modal);
+    });
+}
+
+// Получение класса бейджа статуса
+function getStatusBadgeClass(status) {
+    switch (status) {
+        case 'mined': return 'bg-danger';
+        case 'unconfirmed': return 'bg-warning text-dark';
+        case 'demined': return 'bg-success';
+        case 'archived': return 'bg-secondary';
+        case 'secret': return 'bg-purple';
+        case 'dangerous': return 'bg-danger';
+        default: return 'bg-secondary';
+    }
+}
+
+// Получение класса бейджа приоритета
+function getPriorityBadgeClass(priority) {
+    switch (priority) {
+        case 'high': return 'bg-danger';
+        case 'medium': return 'bg-warning text-dark';
+        case 'low': return 'bg-info';
+        default: return 'bg-secondary';
+    }
+}
+
+// Форматирование даты
+function formatDate(dateString) {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleString('uk-UA');
 }
 
 // Функция для фильтрации маркеров по региону
@@ -794,8 +1070,7 @@ function filterMapMarkersByRegion() {
         markers.forEach(marker => {
             if (marker instanceof google.maps.Marker) {
                 marker.setMap(map);
-            } else if (google.maps.marker && google.maps.marker.AdvancedMarkerElement && 
-                       marker instanceof google.maps.marker.AdvancedMarkerElement) {
+            } else if (marker instanceof google.maps.marker.AdvancedMarkerElement) {
                 marker.map = map;
             }
         });
@@ -807,20 +1082,10 @@ function filterMapMarkersByRegion() {
             
             const show = obj.region_id.toString() === selectedRegionId;
             
-            if (show) {
             if (marker instanceof google.maps.Marker) {
-                    marker.setMap(map);
-                } else if (google.maps.marker && google.maps.marker.AdvancedMarkerElement && 
-                           marker instanceof google.maps.marker.AdvancedMarkerElement) {
-                    marker.map = map;
-                }
-            } else {
-                if (marker instanceof google.maps.Marker) {
-                    marker.setMap(null);
-                } else if (google.maps.marker && google.maps.marker.AdvancedMarkerElement && 
-                           marker instanceof google.maps.marker.AdvancedMarkerElement) {
-                    marker.map = null;
-                }
+                marker.setMap(show ? map : null);
+            } else if (marker instanceof google.maps.marker.AdvancedMarkerElement) {
+                marker.map = show ? map : null;
             }
         });
         
@@ -890,7 +1155,10 @@ function applyFilters() {
                 }
                 
                 // Create marker for the object
-                const markerIcon = getMarkerIconByStatus(obj.status);
+                const markerIcon = {
+                    url: getMarkerIconByStatus(obj.status),
+                    scaledSize: new google.maps.Size(32, 32)
+                };
                 
                 const marker = new google.maps.Marker({
                     position: { lat: obj.latitude, lng: obj.longitude },
@@ -905,15 +1173,24 @@ function applyFilters() {
                 // Add to cluster array
                 markersForCluster.push(marker);
                 
-                // Определяем радиус опасной зоны
-                const radius = obj.radius ? obj.radius : getRadiusFromPriority(obj.priority);
-                
-                // Создаем информационное окно с радиусом
+                // Create info window
                 const infoWindow = new google.maps.InfoWindow({
                     content: `
-                        <div style="max-width: 200px; text-align: center;">
-                            <h6 style="margin: 5px 0;">${obj.title || `Об'єкт #${obj.id}`}</h6>
-                            <p style="margin: 5px 0;"><strong>Радіус небезпечної зони:</strong><br> ${radius}м (${(radius/1000).toFixed(1)}км)</p>
+                        <div style="max-width: 300px;">
+                            <h5 style="margin-top: 0;">${obj.title || `Об'єкт #${obj.id}`}</h5>
+                            ${obj.photo_url ? 
+                                `<div style="margin-bottom: 10px; text-align: center;">
+                                    <img src="${obj.photo_url}" alt="Фото об'єкта" style="max-width: 100%; max-height: 200px; border-radius: 4px;">
+                                </div>` : ''}
+                            <p>${obj.description || 'Опис відсутній'}</p>
+                            <p><strong>Статус:</strong> ${getStatusText(obj.status)}</p>
+                            <p><strong>Пріоритет:</strong> ${getPriorityText(obj.priority)}</p>
+                            <p><strong>Радіус небезпечної зони:</strong> ${obj.radius ? `${obj.radius}м (${(obj.radius/1000).toFixed(1)}км)` : getRadiusFromPriority(obj.priority) + 'м'}</p>
+                            <p><strong>Регіон:</strong> ${obj.region_name || 'Не вказано'}</p>
+                            <p><strong>Додано:</strong> ${formatDate(obj.reported_at)}</p>
+                            <div style="margin-top: 10px;">
+                                <button onclick="viewObjectDetails(${obj.id})" class="btn btn-sm btn-primary">Детальніше</button>
+                            </div>
                         </div>
                     `
                 });
@@ -924,6 +1201,7 @@ function applyFilters() {
                 });
                 
                 // Draw danger circle
+                const radius = obj.radius ? obj.radius : getRadiusFromPriority(obj.priority);
                 const dangerCircle = new google.maps.Circle({
                     strokeColor: "#FF0000",
                     strokeOpacity: 0.8,
@@ -947,80 +1225,51 @@ function applyFilters() {
                 // Configure renderer for clusters
                 const renderer = {
                     render: ({ count, position }) => {
-                        try {
-                            // Use standard markers if AdvancedMarkerElement is not available
-                            if (!google.maps.marker || !google.maps.marker.AdvancedMarkerElement) {
-                                return new google.maps.Marker({
-                                    position,
-                                    label: {
-                                        text: String(count),
-                                        color: "white",
-                                        fontSize: "10px"
-                                    },
-                                    icon: {
-                                        path: google.maps.SymbolPath.CIRCLE,
-                                        scale: 20,
-                                        fillColor: "#ff0000",
-                                        fillOpacity: 0.7,
-                                        strokeWeight: 2,
-                                        strokeColor: "#ffffff"
-                                    }
-                                });
-                            }
-                            
-                            // Create element for cluster
-                            const clusterElement = document.createElement('div');
-                            clusterElement.className = 'cluster-marker';
-                            clusterElement.style.position = 'relative';
-                            
-                            // Set size based on marker count
-                            let size = 48; // Minimum size
-                            if (count > 10) size = 64;
-                            if (count > 50) size = 80;
-                            if (count > 100) size = 96;
-                            
-                            // Create flag image
-                            const flagImg = document.createElement('img');
-                            flagImg.src = "https://maps.google.com/mapfiles/ms/icons/red-dot.png";
-                            flagImg.style.width = `${size}px`;
-                            flagImg.style.height = `${size}px`;
-                            clusterElement.appendChild(flagImg);
-                            
-                            // Position correctly
-                            clusterElement.style.transform = `translate(-6px, -${size}px)`;
-                            
-                            // Create count indicator
-                            const countElement = document.createElement('div');
-                            countElement.style.position = 'absolute';
-                            countElement.style.top = '50%';
-                            countElement.style.left = '50%';
-                            countElement.style.transform = 'translate(-50%, -80%)';
-                            countElement.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-                            countElement.style.borderRadius = '50%';
-                            countElement.style.width = `${Math.round(size * 0.6)}px`;
-                            countElement.style.height = `${Math.round(size * 0.6)}px`;
-                            countElement.style.display = 'flex';
-                            countElement.style.alignItems = 'center';
-                            countElement.style.justifyContent = 'center';
-                            countElement.style.color = 'white';
-                            countElement.style.fontWeight = 'bold';
-                            countElement.style.fontSize = `${Math.round(size / 3)}px`;
-                            countElement.textContent = count;
-                            clusterElement.appendChild(countElement);
-                            
-                            // Create advanced marker
-                            return new google.maps.marker.AdvancedMarkerElement({
-                                position,
-                                content: clusterElement
-                            });
-                        } catch (error) {
-                            console.error("Error rendering cluster marker:", error);
-                            // Fallback to simple marker
-                            return new google.maps.Marker({
-                                position,
-                                label: String(count)
-                            });
-                        }
+                        // Create element for cluster
+                        const clusterElement = document.createElement('div');
+                        clusterElement.className = 'cluster-marker';
+                        clusterElement.style.position = 'relative';
+                        
+                        // Set size based on marker count
+                        let size = 48; // Minimum size
+                        if (count > 10) size = 64;
+                        if (count > 50) size = 80;
+                        if (count > 100) size = 96;
+                        
+                        // Create flag image
+                        const flagImg = document.createElement('img');
+                        flagImg.src = "/static/images/flag_red.png";
+                        flagImg.style.width = `${size}px`;
+                        flagImg.style.height = `${size}px`;
+                        clusterElement.appendChild(flagImg);
+                        
+                        // Position correctly
+                        clusterElement.style.transform = `translate(-6px, -${size}px)`;
+                        
+                        // Create count indicator
+                        const countElement = document.createElement('div');
+                        countElement.style.position = 'absolute';
+                        countElement.style.top = '50%';
+                        countElement.style.left = '50%';
+                        countElement.style.transform = 'translate(-50%, -80%)';
+                        countElement.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+                        countElement.style.borderRadius = '50%';
+                        countElement.style.width = `${Math.round(size * 0.6)}px`;
+                        countElement.style.height = `${Math.round(size * 0.6)}px`;
+                        countElement.style.display = 'flex';
+                        countElement.style.alignItems = 'center';
+                        countElement.style.justifyContent = 'center';
+                        countElement.style.color = 'white';
+                        countElement.style.fontWeight = 'bold';
+                        countElement.style.fontSize = `${Math.round(size / 3)}px`;
+                        countElement.textContent = count;
+                        clusterElement.appendChild(countElement);
+                        
+                        // Create advanced marker
+                        return new google.maps.marker.AdvancedMarkerElement({
+                            position,
+                            content: clusterElement
+                        });
                     }
                 };
                 
@@ -1088,12 +1337,8 @@ function setupMapClickListener() {
         const reportBtn = document.getElementById('reportDangerBtn');
         if (reportBtn) {
             reportBtn.addEventListener('click', function() {
-                try {
-                    const reportModal = new bootstrap.Modal(document.getElementById('reportModal'));
-                    reportModal.show();
-                } catch (innerError) {
-                    console.error('Error showing report modal:', innerError);
-                }
+                const reportModal = new bootstrap.Modal(document.getElementById('reportModal'));
+                reportModal.show();
             });
         }
     } catch (error) {
@@ -1103,86 +1348,128 @@ function setupMapClickListener() {
 
 // Function to add a single marker to the map
 function addMarker(obj) {
-    try {
     // Skip archived and secret objects entirely for citizen view
     if (obj.status === 'archived' || obj.status === 'secret') {
         return null;
     }
-        
-        // Check if map is initialized
-        if (!isMapInitialized()) {
-            console.error('Map is not initialized');
-            return null;
-        }
+    
+    // Check if map is initialized
+    if (!isMapInitialized()) {
+        console.error('Map is not initialized');
+        return null;
+    }
     
     // Determine marker icon based on status
     let markerIcon;
     
     if (obj.status === 'mined' || obj.status === 'dangerous') {
+        // Use red flag for dangerous objects
         markerIcon = {
-                url: "/static/images/red_marker.png",
-                scaledSize: new google.maps.Size(32, 32)
+            url: "/static/images/flag_red.png",
+            scaledSize: new google.maps.Size(48, 48),
+            anchor: new google.maps.Point(6, 48)
         };
     } else if (obj.status === 'demined') {
-            markerIcon = { url: "/static/images/green_marker.png" };
+        markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png" };
     } else if (obj.status === 'unconfirmed') {
-            markerIcon = { url: "/static/images/yellow_marker.png" };
+        markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png" };
     } else {
-            markerIcon = { url: "/static/images/blue_marker.png" };
-        }
-        
-        // Create marker
-        const marker = new google.maps.Marker({
+        // Default icon for any other status (should not happen in citizen view)
+        markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png" };
+    }
+    
+    let marker;
+    
+    try {
+        // Always use standard marker for compatibility
+        marker = new google.maps.Marker({
             position: { lat: obj.latitude, lng: obj.longitude },
             map: map,
             title: obj.title || `Об'єкт #${obj.id}`,
             icon: markerIcon
         });
         
-        // Add to markers array
-        markers.push(marker);
+        // Check if the object belongs to the current user
+        const isMyObject = currentUser && obj.reported_by === currentUser.id;
         
-        // Create info window
-        const infoWindow = new google.maps.InfoWindow({
-            content: `
-                <div style="max-width: 300px;">
-                    <h5 style="margin-top: 0;">${obj.title || `Об'єкт #${obj.id}`}</h5>
-                    <p>${obj.description || 'Опис відсутній'}</p>
-                    <p><strong>Статус:</strong> ${getStatusText(obj.status)}</p>
-                    <p><strong>Пріоритет:</strong> ${getPriorityText(obj.priority)}</p>
-                    <div style="margin-top: 10px;">
-                <button onclick="editObject(${obj.id})" class="btn btn-sm btn-primary">Редагувати</button>
+        // Get HTML for displaying photo
+        let photoHtml = '';
+        if (obj.photo_url) {
+            photoHtml = `
+                <div style="margin-bottom: 10px; text-align: center;">
+                    <img src="${obj.photo_url}" alt="Фото об'єкта" style="max-width: 100%; max-height: 200px; border-radius: 4px; cursor: pointer;" 
+                        class="object-photo" data-photo-url="${obj.photo_url}" 
+                        onclick="showFullSizePhoto('${obj.photo_url}', '${obj.title}')"
+                        onerror="this.onerror=null; this.src='/static/images/no-image.svg'; this.alt='Фото недоступно';">
+                    <div class="small text-muted">Натисніть на фото для збільшення</div>
+                </div>`;
+        }
+        
+        // Create info window with edit option if it's the user's object
+        let content = `
+            <div style="padding: 10px;">
+                <h5 style="margin-top: 0;">${obj.title}</h5>
+                ${photoHtml}
+                <p style="margin-bottom: 5px;"><strong>Статус:</strong> ${getStatusText(obj.status)}</p>
+                <p style="margin-bottom: 5px;"><strong>Пріоритет:</strong> ${getPriorityText(obj.priority)}</p>
+                <p style="margin-bottom: 5px;"><strong>Регіон:</strong> ${obj.region_name}</p>
+                <p style="margin-bottom: 5px;"><strong>Дата виявлення:</strong> ${new Date(obj.reported_at).toLocaleDateString('uk-UA')}</p>
+                <p>${obj.description ? (obj.description.length > 100 ? obj.description.substring(0, 100) + '...' : obj.description) : 'Опис відсутній'}</p>
+                <div class="mt-2">
+                    <button onclick="viewObjectDetails(${obj.id})" class="btn btn-sm btn-primary">Детальніше</button>
+            `;
+        
+        // If the object belongs to the current user, add edit button
+        if (isMyObject) {
+            content += `
+                    <button class="btn btn-sm btn-warning edit-object-btn ms-2" data-object-id="${obj.id}">Редагувати</button>
+            `;
+        }
+        
+        content += `
             </div>
         </div>
-            `
+    `;
+    
+    const infoWindow = new google.maps.InfoWindow({ content });
+    
+    // Add click handler to marker (using standard listener)
+    marker.addListener('click', () => {
+        infoWindow.open(map, marker);
+        
+        // Add event handler for edit button inside infoWindow
+        setTimeout(() => {
+            const editBtn = document.querySelector(`.edit-object-btn[data-object-id="${obj.id}"]`);
+            if (editBtn) {
+                editBtn.addEventListener('click', () => {
+                    editObject(obj.id);
+                });
+            }
+        }, 100);
+    });
+    
+    // Add marker to array
+    markers.push(marker);
+    
+    // Draw danger circle around marker
+    try {
+        let radius = obj.radius ? obj.radius : getRadiusFromPriority(obj.priority);
+        
+        const dangerCircle = new google.maps.Circle({
+            strokeColor: "#FF0000",
+            strokeOpacity: 0.8,
+            strokeWeight: 2,
+            fillColor: "#FF0000",
+            fillOpacity: 0.15,
+            map: map,
+            center: { lat: obj.latitude, lng: obj.longitude },
+            radius: radius
         });
         
-        // Add click listener
-        marker.addListener('click', () => {
-            infoWindow.open(map, marker);
-        });
-        
-        // Add danger circle
-        try {
-            const radius = obj.radius ? obj.radius : getRadiusFromPriority(obj.priority);
-            const dangerCircle = new google.maps.Circle({
-                strokeColor: "#FF0000",
-                strokeOpacity: 0.8,
-                strokeWeight: 2,
-                fillColor: "#FF0000",
-                fillOpacity: 0.15,
-                map: map,
-                center: { lat: obj.latitude, lng: obj.longitude },
-                radius: radius
-            });
-            markers.push(dangerCircle);
-        } catch (circleError) {
-            console.error('Error creating danger circle:', circleError);
+        markers.push(dangerCircle);
+    } catch (circleError) {
+        console.warn('Error creating danger circle:', circleError);
     }
     
     return marker;
-    } catch (err) {
-        console.error('Error creating marker:', err);
-        return null;
-    }
 }
