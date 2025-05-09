@@ -364,177 +364,113 @@ document.addEventListener('DOMContentLoaded', () => {
 // Функция добавления маркеров на карту
 async function addMarkersToMap() {
     try {
-        // Очищаем существующие маркеры
+        // Сначала очищаем карту
         clearMarkers();
         
-        // Если нет данных об объектах, выходим
-        if (!explosiveObjects || !explosiveObjects.length) {
-            console.warn('Нет данных о вибухонебезпечних об\'єктах для отображения на карте');
+        if (!explosiveObjects || explosiveObjects.length === 0) {
+            console.log('Нет объектов для отображения на карте');
             return;
         }
         
-        // Создаем массив для хранения маркеров, которые будут кластеризованы
+        // Получаем выбранный статус фильтра
+        const statusFilter = document.getElementById('filterStatus')?.value || 'all';
+        // Получаем выбранный регион фильтра
+        const regionFilter = document.getElementById('filterRegion')?.value || 'all';
+        // Получаем выбранный приоритет фильтра
+        const priorityFilter = document.getElementById('filterPriority')?.value || 'all';
+        
+        // Создаем отфильтрованный список объектов
+        let filteredObjects = explosiveObjects;
+        
+        // Применяем фильтр по статусу
+        if (statusFilter !== 'all') {
+            filteredObjects = filteredObjects.filter(obj => obj.status === statusFilter);
+        }
+        
+        // Применяем фильтр по региону
+        if (regionFilter !== 'all') {
+            filteredObjects = filteredObjects.filter(obj => obj.region_id.toString() === regionFilter);
+        }
+        
+        // Применяем фильтр по приоритету
+        if (priorityFilter !== 'all') {
+            filteredObjects = filteredObjects.filter(obj => obj.priority === priorityFilter);
+        }
+        
+        console.log(`Отображаем ${filteredObjects.length} объектов на карте`);
+        
+        // Масив для маркеров, которые должны быть кластеризованы
         const markersForCluster = [];
         
         // Добавляем маркеры на карту
-        explosiveObjects.forEach(obj => {
-            // Определяем иконку маркера в зависимости от статуса
-            let markerIcon;
-            
-            if (obj.status === 'mined' || obj.status === 'dangerous') {
-                // Используем красный флаг для опасных объектов
-                markerIcon = {
-                    url: "/static/images/flag_red.png",
-                    scaledSize: new google.maps.Size(48, 48),
-                    anchor: new google.maps.Point(6, 48) // Anchor point at the bottom of the flag pole
+        filteredObjects.forEach(obj => {
+            try {
+                // Создаем маркер
+                const markerIcon = {
+                    url: getMarkerIconByStatus(obj.status),
+                    scaledSize: new google.maps.Size(32, 32)
                 };
-            } else if (obj.status === 'demined') {
-                markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png" };
-            } else if (obj.status === 'unconfirmed') {
-                markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png" };
-            } else if (obj.status === 'archived') {
-                markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png" };
-            }
-            
-            let marker;
-            
-            // Проверяем доступность AdvancedMarkerElement
-            if (google.maps.marker && google.maps.marker.AdvancedMarkerElement) {
-                // Создаем элемент для контента маркера
-                const markerContent = document.createElement('div');
                 
-                if (obj.status === 'mined' || obj.status === 'dangerous') {
-                    // Для опасных объектов используем изображение флага
-                    const img = document.createElement('img');
-                    img.src = "/static/images/flag_red.png";
-                    img.style.width = '48px';
-                    img.style.height = '48px';
-                    // Позиционируем флаг так, чтобы его основание находилось в точке координат
-                    markerContent.style.position = 'relative';
-                    markerContent.style.transform = 'translate(-6px, -48px)';
-                    markerContent.appendChild(img);
-                } else {
-                    // Для других статусов создаем цветной круг
-                    markerContent.style.width = '20px';
-                    markerContent.style.height = '20px';
-                    markerContent.style.borderRadius = '50%';
-                    markerContent.style.border = '2px solid white';
-                    
-                    // Определяем цвет кружка в зависимости от статуса
-                    if (obj.status === 'demined') {
-                        markerContent.style.backgroundColor = '#4CAF50'; // зеленый
-                    } else if (obj.status === 'unconfirmed') {
-                        markerContent.style.backgroundColor = '#FFC107'; // желтый
-                    } else if (obj.status === 'archived') {
-                        markerContent.style.backgroundColor = '#607D8B'; // серый/синий
-                    }
-                }
-                
-                // Создаем AdvancedMarkerElement
-                marker = new google.maps.marker.AdvancedMarkerElement({
+                const marker = new google.maps.Marker({
                     position: { lat: obj.latitude, lng: obj.longitude },
                     map: map,
-                    title: obj.title || `Объект #${obj.id}`,
-                    content: markerContent
-                });
-            } else {
-                // Запасной вариант с обычным маркером
-                marker = new google.maps.Marker({
-                    position: { lat: obj.latitude, lng: obj.longitude },
-                    map: map,
-                    title: obj.title || `Объект #${obj.id}`,
+                    title: obj.title || `Об'єкт #${obj.id}`,
                     icon: markerIcon
                 });
                 
-                // Добавляем маркер в массив для кластеризации
+                // Добавляем маркер в массив для возможного кластеризования
                 markersForCluster.push(marker);
-            }
-            
-            // Проверяем, принадлежит ли объект текущему пользователю
-            const isMyObject = currentUser && obj.reported_by === currentUser.id;
-            
-            // Получаем HTML для отображения фото
-            let photoHtml = '';
-            if (obj.photo_url) {
-                photoHtml = `
-                    <div style="margin-bottom: 10px; text-align: center;">
-                        <img src="${obj.photo_url}" alt="Фото об'єкта" style="max-width: 100%; max-height: 200px; border-radius: 4px; cursor: pointer;" 
-                            class="object-photo" data-photo-url="${obj.photo_url}" 
-                            onclick="showFullSizePhoto('${obj.photo_url}', '${obj.title}')"
-                            onerror="this.onerror=null; this.src='/static/images/no-image.svg'; this.alt='Фото недоступно';">
-                        <div class="small text-muted">Натисніть на фото для збільшення</div>
-                    </div>`;
-                console.log("Объект с фото:", obj.id, obj.photo_url);
-            } else {
-                console.log("Объект без фото:", obj.id);
-            }
-            
-            // Создаем инфо-окно с учетом возможности редактирования
-            let content = `
-                <div style="padding: 10px;">
-                    <h5 style="margin-top: 0;">${obj.title}</h5>
-                    ${photoHtml}
-                    <p style="margin-bottom: 5px;"><strong>Статус:</strong> ${getStatusText(obj.status)}</p>
-                    <p style="margin-bottom: 5px;"><strong>Пріоритет:</strong> ${getPriorityText(obj.priority)}</p>
-                    <p style="margin-bottom: 5px;"><strong>Регіон:</strong> ${obj.region_name}</p>
-                    <p style="margin-bottom: 5px;"><strong>Дата виявлення:</strong> ${new Date(obj.reported_at).toLocaleDateString('uk-UA')}</p>
-                    <p>${obj.description ? (obj.description.length > 100 ? obj.description.substring(0, 100) + '...' : obj.description) : 'Опис відсутній'}</p>
-                    <div class="mt-2">
-                        <button onclick="viewObjectDetails(${obj.id})" class="btn btn-sm btn-primary">Детальніше</button>
-            `;
-            
-            // Если объект принадлежит текущему пользователю, добавляем кнопку редактирования
-            if (isMyObject) {
-                content += `
-                        <button class="btn btn-sm btn-warning edit-object-btn ms-2" data-object-id="${obj.id}">Редагувати</button>
-                `;
-            }
-            
-            content += `
-                    </div>
-                </div>
-            `;
-            
-            const infoWindow = new google.maps.InfoWindow({ content });
-            
-            // Добавляем обработчик клика на маркер
-            if (marker.addEventListener) {
-                // Для AdvancedMarkerElement используем addEventListener
-                marker.addEventListener('click', () => {
-                    infoWindow.open(map, marker);
-                    
-                    // Добавляем обработчик события для кнопки редактирования внутри infoWindow
-                    setTimeout(() => {
-                        const editBtn = document.querySelector(`.edit-object-btn[data-object-id="${obj.id}"]`);
-                        if (editBtn) {
-                            editBtn.addEventListener('click', () => {
-                                editObject(obj.id);
-                            });
-                        }
-                    }, 100);
+                
+                // Создаем информационное окно (всплывающее окно при клике)
+                const infoWindow = new google.maps.InfoWindow({
+                    content: `
+                        <div style="max-width: 300px;">
+                            <h5 style="margin-top: 0;">${obj.title || `Об'єкт #${obj.id}`}</h5>
+                            ${obj.photo_url || obj.image_url ? 
+                                `<div style="margin-bottom: 10px; text-align: center;">
+                                    <img src="${obj.photo_url || obj.image_url}" alt="Фото об'єкта" style="max-width: 100%; max-height: 200px; border-radius: 4px;">
+                                </div>` : ''}
+                            <p>${obj.description || 'Опис відсутній'}</p>
+                            <p><strong>Статус:</strong> ${getStatusText(obj.status)}</p>
+                            <p><strong>Пріоритет:</strong> ${getPriorityText(obj.priority)}</p>
+                            <p><strong>Радіус небезпечної зони:</strong> ${obj.radius ? `${obj.radius}м (${(obj.radius/1000).toFixed(1)}км)` : getRadiusFromPriority(obj.priority) + 'м'}</p>
+                            <p><strong>Регіон:</strong> ${obj.region_name || 'Не вказано'}</p>
+                            <p><strong>Додано:</strong> ${formatDate(obj.reported_at)}</p>
+                            <div style="margin-top: 10px;">
+                                <button onclick="viewObjectDetails(${obj.id})" class="btn btn-sm btn-primary">Детальніше</button>
+                            </div>
+                        </div>
+                    `
                 });
-            } else {
-                // Для обычного Marker используем addListener
+                
+                // Открытие информационного окна при клике на маркер
                 marker.addListener('click', () => {
                     infoWindow.open(map, marker);
-                    
-                    // Добавляем обработчик события для кнопки редактирования внутри infoWindow
-                    setTimeout(() => {
-                        const editBtn = document.querySelector(`.edit-object-btn[data-object-id="${obj.id}"]`);
-                        if (editBtn) {
-                            editBtn.addEventListener('click', () => {
-                                editObject(obj.id);
-                            });
-                        }
-                    }, 100);
                 });
+                
+                markers.push(marker);
+                
+                // Рисуем круг опасности вокруг маркера
+                let radius = obj.radius ? obj.radius : getRadiusFromPriority(obj.priority);
+                
+                const dangerCircle = new google.maps.Circle({
+                    strokeColor: "#FF0000",
+                    strokeOpacity: 0.8,
+                    strokeWeight: 2,
+                    fillColor: "#FF0000",
+                    fillOpacity: 0.15,
+                    map: map,
+                    center: { lat: obj.latitude, lng: obj.longitude },
+                    radius: radius
+                });
+                
+                markers.push(dangerCircle);
+            } catch (error) {
+                console.error(`Ошибка при добавлении маркера для объекта ID ${obj.id}:`, error);
             }
-            
-            // Добавляем маркер в массив
-            markers.push(marker);
         });
         
-        // Создаем кластеризатор, если есть маркеры для кластеризации (только для обычных маркеров)
+        // Создаем кластеризатор, если есть маркеры для кластеризации
         if (markersForCluster.length > 0) {
             // Настройка рендеринга кластеров
             const renderer = {
@@ -600,7 +536,7 @@ async function addMarkersToMap() {
             });
         }
     } catch (error) {
-        console.error('Ошибка при загрузке объектов:', error);
+        console.error('Ошибка при добавлении маркеров на карту:', error);
     }
 }
 
@@ -613,7 +549,6 @@ function clearMarkers() {
             markerCluster = null;
         }
         
-        // Очищаем отдельные маркеры
         if (!markers || !markers.length) return;
         
         markers.forEach(marker => {
@@ -622,13 +557,12 @@ function clearMarkers() {
                     marker.setMap(null);
                 } else if (marker instanceof google.maps.marker.AdvancedMarkerElement) {
                     marker.map = null;
-                } else {
-                    // Общий случай для обратной совместимости
-                    if (marker.setMap) {
-                        marker.setMap(null);
-                    } else if ('map' in marker) {
-                        marker.map = null;
-                    }
+                } else if (marker instanceof google.maps.Circle) {
+                    marker.setMap(null);
+                } else if (marker && typeof marker.setMap === 'function') {
+                    marker.setMap(null);
+                } else if (marker && 'map' in marker) {
+                    marker.map = null;
                 }
             } catch (e) {
                 console.warn('Ошибка при удалении маркера:', e);
@@ -638,6 +572,29 @@ function clearMarkers() {
     } catch (error) {
         console.error('Ошибка при очистке маркеров:', error);
         markers = [];
+    }
+}
+
+// Helper function to get radius based on priority
+function getRadiusFromPriority(priority) {
+    switch (priority) {
+        case 'high': return 1000; // 1 km
+        case 'medium': return 500; // 500 m
+        case 'low': return 250; // 250 m
+        case 'secret': return 2000; // 2 km
+        default: return 500;
+    }
+}
+
+// Helper function to get marker icon based on status
+function getMarkerIconByStatus(status) {
+    switch (status) {
+        case 'mined': return '/static/images/red_marker.png';
+        case 'unconfirmed': return '/static/images/yellow_marker.png';
+        case 'demined': return '/static/images/green_marker.png';
+        case 'archived': return '/static/images/gray_marker.png';
+        case 'secret': return '/static/images/purple_marker.png';
+        default: return '/static/images/yellow_marker.png';
     }
 }
 
@@ -685,6 +642,19 @@ function editObject(objectId) {
         return;
     }
     
+    // Получаем текущий радиус объекта или устанавливаем по умолчанию на основе приоритета
+    let defaultRadius = 15000; // 15 км по умолчанию
+    if (obj.radius) {
+        defaultRadius = obj.radius;
+    } else {
+        // Определяем радиус на основе приоритета
+        switch(obj.priority) {
+            case 'high': defaultRadius = 20000; break; // 20 км
+            case 'medium': defaultRadius = 15000; break; // 15 км
+            case 'low': defaultRadius = 10000; break; // 10 км
+        }
+    }
+    
     // Создаем модальное окно для редактирования
     const modalHtml = `
         <div class="modal fade" id="editObjectModal" tabindex="-1" aria-labelledby="editObjectModalLabel" aria-hidden="true">
@@ -699,7 +669,7 @@ function editObject(objectId) {
                             <input type="hidden" id="edit_object_id" value="${obj.id}">
                             <div class="mb-3">
                                 <label for="edit_title" class="form-label">Назва</label>
-                                <input type="text" class="form-control" id="edit_title" value="${obj.title}" required>
+                                <input type="text" class="form-control" id="edit_title" value="${obj.title || ''}">
                             </div>
                             <div class="mb-3">
                                 <label for="edit_description" class="form-label">Опис</label>
@@ -714,6 +684,15 @@ function editObject(objectId) {
                                     <option value="archived" ${obj.status === 'archived' ? 'selected' : ''}>Архів</option>
                                 </select>
                                 <small class="form-text text-muted">Статус может изменить только модератор или администратор</small>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_radius" class="form-label">Радіус небезпечної зони (метри)</label>
+                                <input type="range" class="form-range" id="edit_radius" min="100" max="50000" step="100" value="${defaultRadius}">
+                                <div class="d-flex justify-content-between">
+                                    <small>100м</small>
+                                    <span id="radius_value">${defaultRadius / 1000} км</span>
+                                    <small>50км</small>
+                                </div>
                             </div>
                         </form>
                     </div>
@@ -735,13 +714,19 @@ function editObject(objectId) {
     const editModal = new bootstrap.Modal(document.getElementById('editObjectModal'));
     editModal.show();
     
+    // Добавляем обработчик изменения радиуса для обновления отображаемого значения
+    document.getElementById('edit_radius').addEventListener('input', function() {
+        document.getElementById('radius_value').textContent = (this.value / 1000) + ' км';
+    });
+    
     // Добавляем обработчик для кнопки сохранения
     document.getElementById('saveObjectEdit').addEventListener('click', async () => {
         // Получаем данные из формы
         const editedObj = {
             id: parseInt(document.getElementById('edit_object_id').value),
             title: document.getElementById('edit_title').value,
-            description: document.getElementById('edit_description').value
+            description: document.getElementById('edit_description').value,
+            radius: parseInt(document.getElementById('edit_radius').value)
         };
         
         // Проверяем обязательные поля
@@ -759,7 +744,8 @@ function editObject(objectId) {
                 },
                 body: JSON.stringify({
                     title: editedObj.title,
-                    description: editedObj.description
+                    description: editedObj.description,
+                    radius: editedObj.radius
                 })
             });
             
@@ -1113,6 +1099,11 @@ function resetFilters() {
 
 // Function to add a single marker to the map
 function addMarker(obj) {
+    // Skip archived and secret objects entirely for citizen view
+    if (obj.status === 'archived' || obj.status === 'secret') {
+        return null;
+    }
+    
     // Determine marker icon based on status
     let markerIcon;
     
@@ -1127,7 +1118,8 @@ function addMarker(obj) {
         markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/green-dot.png" };
     } else if (obj.status === 'unconfirmed') {
         markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/yellow-dot.png" };
-    } else if (obj.status === 'archived') {
+    } else {
+        // Default icon for any other status (should not happen in citizen view)
         markerIcon = { url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png" };
     }
     
@@ -1159,8 +1151,6 @@ function addMarker(obj) {
                 markerContent.style.backgroundColor = '#4CAF50'; // green
             } else if (obj.status === 'unconfirmed') {
                 markerContent.style.backgroundColor = '#FFC107'; // yellow
-            } else if (obj.status === 'archived') {
-                markerContent.style.backgroundColor = '#607D8B'; // gray/blue
             }
         }
         
@@ -1168,17 +1158,20 @@ function addMarker(obj) {
         marker = new google.maps.marker.AdvancedMarkerElement({
             position: { lat: obj.latitude, lng: obj.longitude },
             map: map,
-            title: obj.title || `Объект #${obj.id}`,
+            title: obj.title || `Об'єкт #${obj.id}`,
             content: markerContent
         });
     } else {
-        // Fallback to regular marker
+        // Fallback to standard marker
         marker = new google.maps.Marker({
             position: { lat: obj.latitude, lng: obj.longitude },
             map: map,
-            title: obj.title || `Объект #${obj.id}`,
+            title: obj.title || `Об'єкт #${obj.id}`,
             icon: markerIcon
         });
+        
+        // Add to cluster array
+        markersForCluster.push(marker);
     }
     
     // Check if the object belongs to the current user
@@ -1258,8 +1251,10 @@ function addMarker(obj) {
         });
     }
     
-    // Add marker to array
-    markers.push(marker);
+    // Add marker to array only if it was created
+    if (marker) {
+        markers.push(marker);
+    }
     
     return marker;
 }
